@@ -580,6 +580,42 @@ REWRITE_PROMPT_TEMPLATE = """
 
 ## 用户改写参数
 
+### 3.2.1 用户改写参数映射（A03 RewriteParams → Prompt {user_params}）
+
+> **映射规则**：A03 接口的 `RewriteParams` 字段需要转换为 Prompt 的 `{user_params}` 文本块。
+
+| A03 接口字段 | 类型 | Prompt 映射 | 说明 |
+|-------------|------|------------|------|
+| colloquial | float(0-1) | "口语化程度：{value*100}%（0=书面正式，100=极度口语）" | 线性映射 |
+| emoji_density | float(0-1) | "Emoji密度：{value*100}%（0=无Emoji，100=每句1-2个）" | 线性映射，平台规则可覆盖 |
+| emotion_intensity | float(0-1) | "情绪强度：{value*100}%（0=理性克制，100=强烈情绪化）" | 线性映射 |
+| length | enum(short/medium/long) | "目标长度：{short→300字内/medium→600-1500字/long→1500字以上}" | 枚举映射 |
+| custom_instruction | string(max 200) | "用户额外要求：{value}" | 直接注入 |
+
+```python
+def build_user_params(params: RewriteParams) -> str:
+    """将A03接口参数转换为Prompt的{user_params}文本块"""
+    length_map = {
+        "short": "300字以内",
+        "medium": "600-1500字",
+        "long": "1500字以上"
+    }
+    lines = [
+        f"口语化程度：{params.colloquial * 100:.0f}%（0=书面正式，100=极度口语）",
+        f"Emoji密度：{params.emoji_density * 100:.0f}%（0=无Emoji，100=每句1-2个）",
+        f"情绪强度：{params.emotion_intensity * 100:.0f}%（0=理性克制，100=强烈情绪化）",
+        f"目标长度：{length_map.get(params.length, '600-1500字')}",
+    ]
+    if params.custom_instruction:
+        lines.append(f"用户额外要求：{params.custom_instruction}")
+    return "\n".join(lines)
+```
+
+**冲突解决规则**：当用户参数与平台规则冲突时（如 emoji_density=0.9 但目标平台是知乎）：
+1. 平台规则优先，自动降级用户参数
+2. 在 `quality_check.conflicts` 中记录冲突详情
+3. 在 `resolution` 字段说明降级原因（如"知乎平台不适合高Emoji密度，已从90%降至10%"）
+
 {user_params}
 """
 ```
