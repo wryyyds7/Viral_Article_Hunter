@@ -8,7 +8,7 @@ const PYTHON_PORT = parseInt(process.env.PYTHON_PORT || '8000', 10);
 const PYTHON_HOST = '127.0.0.1';
 
 // Proxy helper: forward request to Python FastAPI backend
-function proxyToPython(req: express.Request, res: express.Response): void {
+function proxyToPython(req: Express.Request, res: Express.Response): void {
   const url = req.originalUrl;
   const options: http.RequestOptions = {
     hostname: PYTHON_HOST,
