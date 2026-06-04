@@ -275,7 +275,166 @@ VIRAL_GENE_ANALYSIS_PROMPT = """
 """
 ```
 
-### 2.3 批量分析 Prompt（精简版）
+### 2.3 LLM 输出到 API 响应的适配映射
+
+> **⚠️ 关键设计**：LLM 的输出结构（深度嵌套、面向分析）和 API 的响应结构（扁平化、面向前端展示）天然不同。
+> 后端需要一个适配层，将 LLM 的 JSON 输出转换为 A02 接口定义的 `AnalysisDetail` 结构。
+> 以下映射表是适配层的**唯一规格说明**。
+
+#### 2.3.1 字段映射表
+
+| LLM 输出路径 | → A02 API 字段 | 转换规则 |
+|-------------|---------------|----------|
+| `overall_score.virality_potential` | `hotness_score.total` | 直接映射（1-100） |
+| — | `hotness_score.level` | 计算映射：≥80→viral, ≥60→potential, ≥40→average, <40→low |
+| `overall_score.score_breakdown.title` | `hotness_score.dimensions.title_power` | 直接映射 |
+| `overall_score.score_breakdown.emotion` | `hotness_score.dimensions.emotion_density` | 直接映射 |
+| `overall_score.score_breakdown.interaction` | `hotness_score.dimensions.interaction_hook` | 直接映射 |
+| `overall_score.score_breakdown.structure` | `hotness_score.dimensions.structure_density` | 直接映射 |
+| `title_analysis.formula_type` | `title_formulas[0].type` | 直接映射为主公式 |
+| `title_analysis.formula_secondary` | `title_formulas[1].type` | 映射为次公式（如有） |
+| `title_analysis.formula_detail` | `title_formulas[0].display` | 直接映射 |
+| `title_analysis.formula_detail` | `title_formulas[0].matched_text` | 截取公式说明中引用的原文片段 |
+| `title_analysis.confidence` | `title_formulas[0].confidence` | high→0.9, medium→0.6, low→0.3 |
+| — | `title_formulas[].is_user_modified` | 默认 false，用户修正后置 true |
+| `emotion_analysis.primary_emotion` | `emotion_tags[0]` (is_primary=true) | 主情绪映射 |
+| `emotion_analysis.secondary_emotions[]` | `emotion_tags[1..n]` (is_primary=false) | 次情绪逐个映射 |
+| `emotion_analysis.cocktail_type` | `emotion_tags[0].category` | 鸡尾酒类型→情绪分类 |
+| `emotion_analysis.curve.opening_intensity` | `emotion_tags[0].level` | ≥7→strong, ≥4→medium, <4→weak |
+| `structure_analysis.framework` | `structure_template.type` | 直接映射 |
+| `structure_analysis.framework_detail` | `structure_template.display` | 直接映射 |
+| `structure_analysis.confidence` | `structure_template.confidence` | high→0.9, medium→0.6, low→0.3 |
+| `structure_analysis.sections[]` | `structure_template.segments[]` | type→role, content_summary→summary |
+| `interaction_analysis.hook_types[]` | `interaction_hooks[]` ⬅️ 新增 | 直接映射，A02补充此字段 |
+| `interaction_analysis.interaction_potential` | `interaction_score` ⬅️ 新增 | 直接映射（1-10） |
+| `topic_analysis.audience_scope` | `audience_scope` ⬅️ 新增 | 直接映射 |
+| `topic_analysis.timeliness` | `timeliness` ⬅️ 新增 | 直接映射 |
+| `overall_score.top_3_genes[]` | `top_genes[]` ⬅️ 新增 | 直接映射 |
+
+#### 2.3.2 适配层代码骨架
+
+```python
+# app/services/analysis_adapter.py
+"""LLM 输出 → API 响应适配层"""
+
+CONFIDENCE_MAP = {"high": 0.9, "medium": 0.6, "low": 0.3}
+INTENSITY_LEVEL_MAP = lambda v: "strong" if v >= 7 else "medium" if v >= 4 else "weak"
+VIRALITY_LEVEL_MAP = lambda v: "viral" if v >= 80 else "potential" if v >= 60 else "average" if v >= 40 else "low"
+
+
+def adapt_analysis(llm_output: dict, article_id: str) -> dict:
+    """将 LLM 的 JSON 输出适配为 A02 AnalysisDetail 结构"""
+    overall = llm_output.get("overall_score", {})
+    title_a = llm_output.get("title_analysis", {})
+    emotion_a = llm_output.get("emotion_analysis", {})
+    structure_a = llm_output.get("structure_analysis", {})
+    interaction_a = llm_output.get("interaction_analysis", {})
+    topic_a = llm_output.get("topic_analysis", {})
+
+    # 热度评分
+    virality = overall.get("virality_potential", 0)
+    breakdown = overall.get("score_breakdown", {})
+    hotness_score = {
+        "total": virality,
+        "level": VIRALITY_LEVEL_MAP(virality),
+        "dimensions": {
+            "title_power": breakdown.get("title", 0),
+            "emotion_density": breakdown.get("emotion", 0),
+            "interaction_hook": breakdown.get("interaction", 0),
+            "structure_density": breakdown.get("structure", 0),
+        }
+    }
+
+    # 标题公式
+    title_formulas = []
+    if title_a.get("formula_type"):
+        title_formulas.append({
+            "type": title_a["formula_type"],
+            "display": title_a.get("formula_detail", ""),
+            "confidence": CONFIDENCE_MAP.get(title_a.get("confidence", "medium"), 0.6),
+            "matched_text": _extract_matched_text(title_a.get("formula_detail", "")),
+            "is_user_modified": False,
+        })
+    if title_a.get("formula_secondary"):
+        title_formulas.append({
+            "type": title_a["formula_secondary"],
+            "display": "",
+            "confidence": CONFIDENCE_MAP.get(title_a.get("confidence", "medium"), 0.6) * 0.8,
+            "matched_text": "",
+            "is_user_modified": False,
+        })
+
+    # 情绪标签
+    emotion_tags = []
+    if emotion_a.get("primary_emotion"):
+        emotion_tags.append({
+            "tag": emotion_a["primary_emotion"],
+            "display": _emotion_display(emotion_a["primary_emotion"]),
+            "level": INTENSITY_LEVEL_MAP(emotion_a.get("curve", {}).get("opening_intensity", 5)),
+            "is_primary": True,
+            "category": emotion_a.get("cocktail_type", "mixed"),
+            "is_user_modified": False,
+        })
+    for sec in emotion_a.get("secondary_emotions", []):
+        emotion_tags.append({
+            "tag": sec,
+            "display": _emotion_display(sec),
+            "level": "medium",
+            "is_primary": False,
+            "category": "mixed",
+            "is_user_modified": False,
+        })
+
+    # 结构模板
+    sections = structure_a.get("sections", [])
+    segments = [{"role": s.get("type", "body"), "summary": s.get("content_summary", "")} for s in sections]
+    structure_template = {
+        "type": structure_a.get("framework", "unknown"),
+        "display": structure_a.get("framework_detail", ""),
+        "confidence": CONFIDENCE_MAP.get(structure_a.get("confidence", "medium"), 0.6),
+        "segments": segments,
+    }
+
+    # 新增字段（A02补充）
+    interaction_hooks = interaction_a.get("hook_types", [])
+    interaction_score = interaction_a.get("interaction_potential", 0)
+    audience_scope = topic_a.get("audience_scope", "medium")
+    timeliness = topic_a.get("timeliness", "evergreen")
+    top_genes = overall.get("top_3_genes", [])
+
+    return {
+        "hotness_score": hotness_score,
+        "title_formulas": title_formulas,
+        "emotion_tags": emotion_tags,
+        "structure_template": structure_template,
+        # 新增字段
+        "interaction_hooks": interaction_hooks,
+        "interaction_score": interaction_score,
+        "audience_scope": audience_scope,
+        "timeliness": timeliness,
+        "top_genes": top_genes,
+    }
+```
+
+#### 2.3.3 A02 接口新增字段（需同步更新 A02 文档）
+
+| 新增字段 | 类型 | 说明 | 来源 |
+|----------|------|------|------|
+| `interaction_hooks` | string[] | 互动钩子类型列表 | `interaction_analysis.hook_types` |
+| `interaction_score` | integer | 互动潜力评分 1-10 | `interaction_analysis.interaction_potential` |
+| `audience_scope` | string | 受众面：broad/medium/narrow | `topic_analysis.audience_scope` |
+| `timeliness` | string | 时效性：evergreen/seasonal/trending | `topic_analysis.timeliness` |
+| `top_genes` | TopGene[] | TOP3爆款基因 | `overall_score.top_3_genes` |
+
+**TopGene 结构：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| gene_name | string | 基因名称 |
+| gene_detail | string | 基因说明 |
+| contribution_pct | number | 贡献占比% |
+
+### 2.4 批量分析 Prompt（精简版）
 
 当需要一次性分析多篇素材时，使用精简版 Prompt 降低 Token 消耗：
 
