@@ -1,418 +1,172 @@
-# projects
+# 爆文猎人 (HotContent Hunter)
 
-这是一个基于 Express + Vite + TypeScript + Tailwind CSS 的全栈 Web 应用项目，由扣子编程 CLI 创建。
+AI 驱动的内容创作 SaaS 平台 —— 多平台热点采集、爆款基因分析、一键跨平台改写。
 
-**核心特性：**
-- 🚀 前端：Vite + TypeScript + Tailwind CSS
-- 🔧 后端：Express + TypeScript，提供 RESTful API
-- 🔥 开发模式：Vite HMR + Express API，单进程启动
-- 📦 生产模式：Express 静态服务 + API，高性能部署
+## 功能概览
 
-## 快速开始
+| 模块 | 功能 | 说明 |
+|------|------|------|
+| 多平台热点采集 | 关键词搜索 + 多平台同步采集 | 支持小红书/知乎/微信公众号/微博/B站/抖音/头条/豆瓣/即刻 |
+| 用户文档上传 | TXT/MD/DOCX/PDF/HTML 五种格式 | ≥10 篇自动触发分析，<10 篇提醒后可继续 |
+| 爆款基因分析 | LLM 6 维度深度分析 | 热度评分/情绪标签/标题公式/结构模板/互动钩子/平台适配 |
+| 一键跨平台改写 | LLM + 平台风格知识库 | 7 个平台一键改写，SSE 流式输出 |
+| 素材库管理 | 收藏/搜索/标签/分组 | P0 布尔收藏 → P1 多分组 |
+| 数据看板 | 分析统计/趋势/分布 | 时间范围筛选，可视化图表 |
+| 管理后台 | 用户/配额/Key/审核/配置/日志 | AdminOnly 权限控制，操作审计 |
+| 认证系统 | 注册/登录/JWT | 首用户自动 admin，角色分级 |
 
-### 启动开发服务器
+## 技术栈
 
-```bash
-coze dev
 ```
-
-启动后，在浏览器中打开 [http://localhost:5000](http://localhost:5000) 查看应用。
-
-开发服务器支持热更新（HMR），修改代码后页面会自动刷新。
-
-### 构建生产版本
-
-```bash
-coze build
+前端: Vite 7 + TypeScript + Tailwind CSS (SPA)
+后端: Express + TypeScript (RESTful API)
+数据库: PostgreSQL (Supabase 托管)
+LLM: coze-coding-dev-sdk (豆包 Seed 系列)
+存储: Supabase Storage / 对象存储
+认证: JWT + bcrypt
 ```
-
-构建产物位于 `dist/` 目录，可直接部署到静态托管服务。
-
-### 预览生产版本
-
-```bash
-coze start
-```
-
-在本地启动一个静态服务器，预览生产构建的效果。
 
 ## 项目结构
 
 ```
-├── server/                # 后端服务器目录
-│   ├── index.ts          # express 服务器入口
-│   ├── routes/           # API 路由目录
-│   │   └── index.ts      # 路由定义
-│   └── vite.ts           # Vite 集成逻辑
-├── src/                   # 前端源码目录
-│   ├── index.ts          # 前端应用入口（初始化）
-│   ├── main.ts           # 前端主逻辑文件
-│   └── index.css         # 全局样式（包含 Tailwind 指令）
-├── index.html            # HTML 入口文件
-├── vite.config.ts        # Vite 配置
-├── tailwind.config.ts    # Tailwind CSS 配置
-└── tsconfig.json         # TypeScript 配置
+├── server/                    # 后端
+│   ├── server.ts              # Express 入口
+│   ├── vite.ts                # Vite 开发中间件
+│   ├── routes/                # API 路由
+│   │   ├── auth.ts            # 认证 (注册/登录/用户信息)
+│   │   ├── articles.ts        # 文章素材 CRUD
+│   │   ├── analysis.ts        # 爆款基因分析
+│   │   ├── rewrite.ts         # 跨平台改写 (SSE流式)
+│   │   ├── collection.ts      # 热点采集
+│   │   ├── upload.ts          # 文档上传
+│   │   ├── analytics.ts       # 数据看板
+│   │   ├── admin.ts           # 管理后台
+│   │   └── settings.ts        # 设置
+│   └── src/storage/database/  # Supabase 客户端 + 类型
+├── src/                       # 前端
+│   ├── main.ts                # 页面渲染 + 交互逻辑
+│   ├── api.ts                 # API 客户端封装
+│   ├── router.ts              # SPA 路由
+│   └── index.ts               # 入口
+├── src/storage/database/shared/
+│   └── schema.ts              # 数据库 Schema (14 张表)
+├── docs/                      # 项目文档
+│   ├── 产品文档/              # PRD
+│   ├── 功能文档/              # F01-F08
+│   ├── 接口文档/              # A00-A08
+│   └── 技术文档/              # 技术方案/认证/Prompt/演进路线等
+├── scripts/                   # 构建/启动脚本
+│   ├── dev.sh                 # 开发环境
+│   ├── build.sh               # 构建
+│   └── start.sh               # 生产环境
+├── index.html                 # SPA 入口
+├── package.json
+├── vite.config.ts
+└── tsconfig.json
 ```
 
-**目录说明：**
+## 数据库设计 (14 张表)
 
-- **`server/`** - 后端服务器代码
-  - `server.ts` - 服务器主入口，负责创建和启动 Express 应用
-  - `routes/` - API 路由模块，支持按功能拆分路由
-  - `vite.ts` - Vite 开发服务器和静态文件服务集成
+### 用户体系
+- **users** — 用户账号 (username/email/角色/状态/配额)
+- **user_quota** — 用户配额 (每日分析/改写/采集/上传上限 + 已用计数)
 
-- **`src/`** - 前端应用代码
-  - 所有前端相关代码都在这里
+### 数据入口
+- **collection_task** — 采集任务 (关键词/平台/状态/结果数)
+- **upload_batch** — 上传批次 (文件数/成功数/阈值判断)
+- **upload_file** — 上传文件 (文件名/格式/解析状态/关联文章)
+- **article** — 文章素材 (标题/正文/来源平台/采集方式/标签) — 核心表
 
-**工作原理：**
+### AI 处理
+- **analysis_result** — 爆款分析结果 (6 维度 JSONB + LLM 元信息)
+- **rewrite_task** — 改写任务 (目标平台/风格参数/状态)
+- **rewrite_result** — 改写结果 (每平台一条/相似度/质量评分)
 
-- **开发模式** (`coze dev`)：
-  - 运行 `server/server.ts` 启动 Express 服务器
-  - Vite 以 middleware 模式集成到 Express
-  - 前端支持 HMR（热模块替换）
-  - 后端 API 和前端在同一进程，端口 5000
+### 运营管理
+- **favorite_group** — 收藏分组 (v1.1)
+- **favorite** — 收藏记录 (多对多关联)
+- **admin_audit_log** — 管理员审计 (只 INSERT，不可篡改)
+- **api_keys** — API Key 加密存储 (AES-256)
+- **system_config** — 系统配置 (键值对)
 
-- **生产模式** (`coze start`)：
-  - `coze build` 构建前端 → `dist/` 目录
-  - `coze build` 构建后端 → `dist-server/index.js` (CommonJS 格式)
-  - 运行 `dist-server/index.js` 启动生产服务器
-  - Express 服务静态文件 + API 路由
-  - 单一 Node.js 进程，轻量高效
+## 快速开始
 
-## 核心开发规范
+### 1. 环境变量
 
-### 1. 后端 API 开发
-
-**添加新的 API 路由**
-
-在 `server/routes/index.ts` 中添加路由：
-
-```typescript
-// GET 请求示例
-router.get('/api/users', (req, res) => {
-  res.json({
-    users: [
-      { id: 1, name: 'Alice' },
-      { id: 2, name: 'Bob' },
-    ],
-  });
-});
-
-// POST 请求示例
-router.post('/api/users', (req, res) => {
-  const userData = req.body;
-  // 处理业务逻辑
-  res.json({
-    success: true,
-    user: userData,
-  });
-});
-
-// 动态路由参数
-router.get('/api/users/:id', (req, res) => {
-  const userId = req.params.id;
-  res.json({
-    id: userId,
-    name: 'User ' + userId,
-  });
-});
-```
-
-**拆分路由模块**（推荐）
-
-当路由变多时，可以按功能拆分：
-
-```typescript
-// server/routes/users.ts
-import { Router } from 'express';
-
-const router = Router();
-
-router.get('/api/users', (req, res) => {
-  // 用户列表逻辑
-  res.json({ users: [] });
-});
-
-router.post('/api/users', (req, res) => {
-  // 创建用户逻辑
-  res.json({ success: true });
-});
-
-export default router;
-```
-
-然后在 `server/server.ts` 中注册：
-
-```typescript
-import usersRouter from './routes/users';
-
-// 注册路由
-app.use(usersRouter);
-```
-
-**前端调用 API**
-
-```typescript
-// GET 请求
-async function getUsers() {
-  const response = await fetch('/api/users');
-  const data = await response.json();
-  console.log(data);
-}
-
-// POST 请求
-async function createUser(name: string) {
-  const response = await fetch('/api/users', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ name }),
-  });
-  const data = await response.json();
-  console.log(data);
-}
-```
-
-**API 最佳实践**
-
-- ✅ 所有 API 路由以 `/api` 开头，避免与前端路由冲突
-- ✅ 使用 RESTful 设计：GET 查询、POST 创建、PUT 更新、DELETE 删除
-- ✅ 返回统一的响应格式：`{ success: boolean, data?: any, error?: string }`
-- ✅ 添加错误处理和参数验证
-
-### 2. 样式开发
-
-**使用 Tailwind CSS**
-
-本项目使用 Tailwind CSS 进行样式开发，支持亮色/暗色模式自动切换。
-
-```typescript
-// 使用 Tailwind 工具类
-app.innerHTML = `
-  <div class="flex items-center justify-center min-h-screen bg-white dark:bg-black">
-    <h1 class="text-4xl font-bold text-black dark:text-white">
-      Hello World
-    </h1>
-  </div>
-`;
-```
-
-**主题变量**
-
-主题变量定义在 `src/index.css` 中，支持自动适配系统主题：
-
-```css
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-```
-
-**常用 Tailwind 类名**
-
-- 布局：`flex`, `grid`, `container`, `mx-auto`
-- 间距：`p-4`, `m-4`, `gap-4`, `space-x-4`
-- 颜色：`bg-white`, `text-black`, `dark:bg-black`, `dark:text-white`
-- 排版：`text-lg`, `font-bold`, `leading-8`, `tracking-tight`
-- 响应式：`sm:`, `md:`, `lg:`, `xl:`
-
-### 2. 依赖管理
-
-**必须使用 pnpm 管理依赖**
+复制 `.env.example` 并填写：
 
 ```bash
-# ✅ 安装依赖
+cp docs/.env.example .env
+```
+
+必填项：
+- `SUPABASE_URL` — Supabase 项目 URL
+- `SUPABASE_SERVICE_ROLE_KEY` — Supabase 服务角色密钥
+- `JWT_SECRET` — JWT 签名密钥
+
+### 2. 安装依赖
+
+```bash
 pnpm install
-
-# ✅ 添加新依赖
-pnpm add package-name
-
-# ✅ 添加开发依赖
-pnpm add -D package-name
-
-# ❌ 禁止使用 npm 或 yarn
-# npm install  # 错误！
-# yarn add     # 错误！
 ```
 
-项目已配置 `preinstall` 脚本，使用其他包管理器会报错。
-
-### 3. TypeScript 开发
-
-**类型安全**
-
-充分利用 TypeScript 的类型系统，确保代码质量：
-
-```typescript
-// 定义接口
-interface User {
-  id: number;
-  name: string;
-  email: string;
-}
-
-// 使用类型
-function createUser(data: User): void {
-  console.log(`Creating user: ${data.name}`);
-}
-
-// DOM 操作类型推断
-const button = document.querySelector<HTMLButtonElement>('#my-button');
-if (button) {
-  button.addEventListener('click', () => {
-    console.log('Button clicked');
-  });
-}
-```
-
-**避免 any 类型**
-
-尽量避免使用 `any`，使用 `unknown` 或具体类型：
-
-```typescript
-// ❌ 不推荐
-function process(data: any) { }
-
-// ✅ 推荐
-function process(data: unknown) {
-  if (typeof data === 'string') {
-    console.log(data.toUpperCase());
-  }
-}
-```
-
-## 常见开发场景
-
-### 添加新页面
-
-本项目是单页应用（SPA），如需多页面：
-
-1. 在 `src/` 下创建新的 `.ts` 文件
-2. 在 `vite.config.ts` 中配置多入口
-3. 创建对应的 `.html` 文件
-
-### DOM 操作
-
-```typescript
-// 获取元素
-const app = document.getElementById('app');
-const button = document.querySelector<HTMLButtonElement>('.my-button');
-
-// 动态创建元素
-const div = document.createElement('div');
-div.className = 'flex items-center gap-4';
-div.textContent = 'Hello World';
-app?.appendChild(div);
-
-// 事件监听
-button?.addEventListener('click', (e) => {
-  console.log('Clicked', e);
-});
-```
-
-### 数据获取
-
-```typescript
-// Fetch API
-async function fetchData() {
-  try {
-    const response = await fetch('https://api.example.com/data');
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Failed to fetch data:', error);
-  }
-}
-
-// 使用数据
-fetchData().then(data => {
-  console.log(data);
-});
-```
-
-### 环境变量
-
-在 `.env` 文件中定义环境变量（需以 `VITE_` 开头）：
+### 3. 启动开发服务器
 
 ```bash
-VITE_API_URL=https://api.example.com
+coze dev
+# 或
+bash scripts/dev.sh
 ```
 
-在代码中使用：
+访问 http://localhost:5000
 
-```typescript
-const apiUrl = import.meta.env.VITE_API_URL;
-console.log(apiUrl); // https://api.example.com
-```
-
-## 技术栈
-
-**前端：**
-- **构建工具**: Vite 7.x
-- **语言**: TypeScript 5.x
-- **样式**: Tailwind CSS 3.x
-
-**后端：**
-- **框架**: Express 4.x
-- **内置中间件**: express.json(), express.urlencoded(), express.static()
-
-**工具：**
-- **包管理器**: pnpm 9+
-- **运行时**: Node.js 18+
-- **开发工具**: tsx (TypeScript 执行器)
-
-## 参考文档
-
-**前端：**
-- [Vite 官方文档](https://cn.vitejs.dev/)
-- [TypeScript 官方文档](https://www.typescriptlang.org/zh/docs/)
-- [Tailwind CSS 文档](https://tailwindcss.com/docs)
-
-**后端：**
-- [Express 官方文档](https://expressjs.com/)
-- [Express 中文文档](https://expressjs.com/zh-cn/)
-
-## 重要提示
-
-1. **必须使用 pnpm** 作为包管理器
-2. **使用 TypeScript** 进行类型安全开发，避免使用 `any`
-3. **使用 Tailwind CSS** 进行样式开发，支持响应式和暗色模式
-4. **环境变量必须以 `VITE_` 开头** 才能在客户端代码中访问
-5. **开发时使用 `coze dev`**，支持热更新和快速刷新
-6. **API 路由以 `/api` 开头**，避免与前端路由冲突
-7. **单进程架构**：开发和生产环境都是前后端在同一进程中运行
-
-## 常见问题
-
-**Q: 如何分离前后端端口？**
-
-如果需要前后端分离部署，可以：
-- 前端：使用 `npx vite` 单独启动（默认端口 5173）
-- 后端：修改 `server.ts`，移除 Vite middleware，单独启动
-
-**Q: 如何添加数据库？**
+### 4. 构建生产版本
 
 ```bash
-# 安装数据库客户端（以 PostgreSQL 为例）
-pnpm add pg
-pnpm add -D @types/pg
-
-# 在 server.ts 中使用
-import { Pool } from 'pg';
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+bash scripts/build.sh
+bash scripts/start.sh
 ```
 
-**Q: 如何部署？**
+## API 接口
 
-1. 运行 `coze build` 构建前后端
-2. 将整个项目上传到服务器
-3. 运行 `pnpm install --prod`
-4. 运行 `coze start` 启动服务
+所有接口前缀 `/api/v1/`：
+
+| 模块 | 路径 | 方法 | 说明 |
+|------|------|------|------|
+| 认证 | /auth/register | POST | 用户注册 |
+| 认证 | /auth/login | POST | 用户登录 |
+| 认证 | /auth/me | GET | 获取当前用户 |
+| 文章 | /articles | GET | 文章列表 |
+| 分析 | /analysis/:articleId | POST | 触发分析 |
+| 分析 | /analysis/:articleId | GET | 获取分析结果 |
+| 改写 | /rewrite | POST | 创建改写任务 |
+| 改写 | /rewrite/:taskId/stream | GET | SSE 流式输出 |
+| 采集 | /collection | POST | 触发采集 |
+| 上传 | /upload | POST | 批量上传 |
+| 看板 | /analytics/overview | GET | 数据概览 |
+| 管理 | /admin/users | GET | 用户列表 |
+| 设置 | /settings | GET/PUT | 系统设置 |
+
+## 核心业务流程
+
+```
+采集/上传 → 文章入库 → LLM 爆款分析 → 用户选择改写
+                                              ↓
+                            SSE 流式输出 ← LLM 跨平台改写
+                                              ↓
+                                     用户复制/导出
+```
+
+## 文档索引
+
+- [产品需求文档 PRD](docs/产品文档/产品需求文档_PRD.md)
+- [技术方案与工程规范](docs/技术文档/技术方案与工程规范.md)
+- [认证与多用户架构](docs/技术文档/认证与多用户架构设计.md)
+- [LLM Prompt 设计文档](docs/技术文档/LLM_Prompt设计文档.md)
+- [技术演进路线](docs/技术文档/技术演进路线.md)
+- [功能流程文档](docs/功能流程文档.md)
+- [项目结构文档](docs/项目结构文档.md)
+
+## License
+
+MIT
