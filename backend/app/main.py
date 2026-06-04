@@ -1,9 +1,11 @@
 """FastAPI 应用入口"""
+import os
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import engine, Base
@@ -134,4 +136,9 @@ async def health_check():
 
 @app.get("/", tags=["系统"])
 async def root():
+    """首页 - 返回落地页"""
+    static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
+    index_path = os.path.join(static_dir, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
     return {"app": settings.APP_NAME, "version": settings.APP_VERSION, "docs": "/docs"}
