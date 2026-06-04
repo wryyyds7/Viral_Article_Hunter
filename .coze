@@ -1,7 +1,7 @@
 [project]
-requires = ["python-3.12"]
-template = "custom"
-version = "0.0.29"
+requires = ["nodejs-24"]
+template = "native-static"
+version = "0.0.30"
 appliedPatches = []
 
 [dev]
