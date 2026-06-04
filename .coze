@@ -1,15 +1,16 @@
 [project]
-requires = ["nodejs-24"]
-template = "native-static"
-version = "0.0.32"
-appliedPatches = []
+requires = [ "nodejs-24" ]
+template = "vite"
+version = "0.0.27"
+appliedPatches = [ ]
 
 [dev]
-build = ["bash", "-c", "pip install -r backend/requirements.txt -q 2>/dev/null; echo build_done"]
-run = ["bash", "-c", "cd backend && uvicorn app.main:app --host 0.0.0.0 --port 5000 --reload"]
-deps = ["git"]
+build = [ "bash", "./scripts/prepare.sh" ]
+run = [ "bash", "./scripts/dev.sh" ]
+validate = [ "bash", "./scripts/validate.sh" ]
+deps = [ "git" ]
 
 [deploy]
-build = ["bash", "-c", "pip install -r backend/requirements.txt -q 2>/dev/null; echo build_done"]
-run = ["bash", "-c", "cd backend && uvicorn app.main:app --host 0.0.0.0 --port 5000 --workers 2"]
-deps = ["git"]
+build = [ "bash", "./scripts/build.sh" ]
+run = [ "bash", "./scripts/start.sh" ]
+deps = [ "git" ]

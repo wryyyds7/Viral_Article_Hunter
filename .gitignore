@@ -158,3 +158,6 @@ Desktop.ini
 # Misc
 .coze-logs
 .preview
+dist-server/
+# Vite
+.vite/
