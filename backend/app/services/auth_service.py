@@ -31,7 +31,7 @@ class AuthService:
             "sub": str(user_id),
             "role": role,
             "iat": now,
-            "exp": now + timedelta(hours=settings.JWT_EXPIRE_HOURS),
+            "exp": now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
         }
         return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 

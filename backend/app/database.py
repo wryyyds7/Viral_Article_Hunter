@@ -1,4 +1,5 @@
 """数据库连接与会话管理"""
+from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from typing import AsyncGenerator
@@ -27,17 +28,23 @@ class Base(DeclarativeBase):
     pass
 
 
+@asynccontextmanager
 async def async_session() -> AsyncGenerator[AsyncSession, None]:
-    """获取独立数据库会话（用于 Service 层非依赖注入场景）"""
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+    """获取独立数据库会话（用于 Service 层非依赖注入场景）
+    
+    Usage:
+        async with async_session() as db:
+            result = await db.execute(...)
+    """
+    session = AsyncSessionLocal()
+    try:
+        yield session
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+    finally:
+        await session.close()
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
