@@ -959,4 +959,251 @@ app/prompts/
 | **缓存分析结果** | 同一篇文章不重复分析，结果缓存 30 天 |
 | **用户配额** | 管理后台可设置每用户每日 LLM 调用次数上限 |
 | **超长内容截断** | 超过 5000 字的文档只分析前 3000 字 + 最后 500 字 |
+
+---
+
+## 8. LLM 输出适配层设计
+
+### 8.1 为什么需要适配层
+
+LLM 输出存在以下不确定性，必须通过适配层转换为接口响应格式：
+- **字段缺失**：LLM 可能跳过某些字段（如 platform_fit 为空数组）
+- **类型偏移**：数字字段返回了字符串（如 `"85"` 而非 `85`）
+- **枚举越界**：返回了 JSON Schema 中未定义的枚举值
+- **嵌套层级错误**：扁平化或过度嵌套
+- **格式异常**：Markdown 混入 JSON、多余换行等
+
+### 8.2 适配层架构
+
+```
+LLM Raw Output (JSON字符串)
+    │
+    ▼
+┌─────────────────────────────────┐
+│  Step 1: 格式清洗              │
+│  - 提取JSON（去除Markdown包裹）│
+│  - 去除BOM/零宽字符            │
+│  - 修复常见JSON语法错误         │
+└─────────────┬───────────────────┘
+              │
+              ▼
+┌─────────────────────────────────┐
+│  Step 2: Schema 校验           │
+│  - JSON Schema Validation      │
+│  - 必填字段检查                │
+│  - 类型强制转换(str→int等)     │
+│  - 枚举值校验(越界→默认值)     │
+└─────────────┬───────────────────┘
+              │
+              ▼
+┌─────────────────────────────────┐
+│  Step 3: 字段映射              │
+│  - LLM字段 → 接口响应字段      │
+│  - 缺失字段填充默认值           │
+│  - 计算派生字段                 │
+└─────────────┬───────────────────┘
+              │
+              ▼
+┌─────────────────────────────────┐
+│  Step 4: 业务校验              │
+│  - 分数范围校验(0-100)          │
+│  - 数组非空校验                 │
+│  - 逻辑一致性校验               │
+└─────────────┬───────────────────┘
+              │
+              ▼
+        API Response
+```
+
+### 8.3 分析结果适配映射表
+
+| LLM 输出字段 | 接口响应字段 | 适配规则 | 缺失默认值 |
+|-------------|-------------|----------|-----------|
+| `overall_score.total` | `hotness_score.score` | 直接映射，clamp(0,100) | `0` |
+| `overall_score.level` | `hotness_score.level` | 直接映射 | `"unknown"` |
+| `overall_score.top_3_genes` | `top_3_genes` | 直接映射 | `[]` |
+| `overall_score.confidence` | `hotness_score.confidence` | 直接映射 | `0.0` |
+| `title_analysis.formula_type` | `title_formulas[0].name` | 包装为数组 | `[{"name":"unknown","description":"分析失败"}]` |
+| `title_analysis.formula_description` | `title_formulas[0].description` | 同上 | |
+| `title_analysis.score` | `title_formulas[0].score` | 同上 | `0` |
+| `title_analysis.keywords` | `title_keywords` | 直接映射 | `[]` |
+| `emotion_analysis.primary_emotion` | `emotion_tags[0]` | 拆分为标签数组 | `[]` |
+| `emotion_analysis.secondary_emotions` | `emotion_tags[1:]` | 追加到标签数组 | |
+| `emotion_analysis.cocktail_type` | `emotion_cocktail_type` | 直接映射 | `"unknown"` |
+| `emotion_analysis.intensity` | `emotion_intensity` | 直接映射 | `0.0` |
+| `structure_analysis.pattern` | `structure_template.pattern` | 嵌套映射 | `"unknown"` |
+| `structure_analysis.sections` | `structure_template.sections` | 直接映射 | `[]` |
+| `structure_analysis.golden_ratio` | `structure_template.golden_ratio` | 直接映射 | `{}` |
+| `interaction_analysis` | `interaction_hooks` | 字段重映射 | `[]` |
+| `topic_analysis` | `topic_analysis` | 直接映射（A02新增字段） | `{}` |
+| `platform_fit` | `platform_fit` | 直接映射（A02新增字段） | `[]` |
+| `raw_content` | `raw_content` | 直接映射 | `""` |
+
+### 8.4 改写结果适配映射表
+
+| LLM 输出字段 | 接口响应字段 | 适配规则 | 缺失默认值 |
+|-------------|-------------|----------|-----------|
+| `rewritten_title` | `title` | 直接映射 | `""` |
+| `rewritten_content` | `content` | 直接映射 | `""` |
+| `platform` | `platform` | 枚举校验 | 必填，失败则丢弃 |
+| `word_count` | `word_count` | 直接映射 | `0` |
+| `similarity_score` | `similarity_score` | clamp(0,100) | `0` |
+| `self_check` | `quality_check` | 字段重映射 | `null` |
+
+### 8.5 适配层代码骨架
+
+```python
+# app/services/llm_adapter.py
+
+import json
+import re
+from typing import Any, Optional
+from pydantic import BaseModel, validator
+
+# ---------- Step 1: 格式清洗 ----------
+
+def extract_json_from_llm(raw: str) -> str:
+    """从LLM输出中提取JSON，兼容Markdown包裹"""
+    # 尝试提取 ```json ... ``` 包裹
+    match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', raw, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    # 去除前后非JSON字符
+    start = raw.find('{')
+    end = raw.rfind('}') + 1
+    if start >= 0 and end > start:
+        return raw[start:end]
+    return raw
+
+# ---------- Step 2: Schema 校验 + 类型强转 ----------
+
+def coerce_type(value: Any, target_type: type, default: Any = None) -> Any:
+    """类型强制转换，失败返回默认值"""
+    try:
+        if target_type == int and isinstance(value, str):
+            return int(float(value))  # "85.5" → 85
+        if target_type == float and isinstance(value, (int, str)):
+            return float(value)
+        if target_type == str:
+            return str(value)
+        return target_type(value)
+    except (ValueError, TypeError):
+        return default
+
+def clamp(value: Any, min_val: float, max_val: float) -> float:
+    """数值范围限制"""
+    num = coerce_type(value, float, 0)
+    return max(min_val, min(max_val, num))
+
+def validate_enum(value: str, allowed: list[str], default: str) -> str:
+    """枚举校验，越界返回默认值"""
+    return value if value in allowed else default
+
+# ---------- Step 3: 字段映射（分析结果） ----------
+
+def adapt_analysis_result(llm_output: dict) -> dict:
+    """将LLM爆款分析输出适配为A02 AnalysisDetail格式"""
+    score_data = llm_output.get("overall_score", {})
+    title_data = llm_output.get("title_analysis", {})
+    emotion_data = llm_output.get("emotion_analysis", {})
+    structure_data = llm_output.get("structure_analysis", {})
+
+    # emotion_tags: 拆分 primary + secondary 为标签数组
+    emotion_tags = []
+    if emotion_data.get("primary_emotion"):
+        emotion_tags.append(emotion_data["primary_emotion"])
+    emotion_tags.extend(emotion_data.get("secondary_emotions", []))
+
+    # title_formulas: 包装为数组
+    title_formulas = []
+    if title_data.get("formula_type"):
+        title_formulas.append({
+            "name": title_data["formula_type"],
+            "description": title_data.get("formula_description", ""),
+            "score": clamp(title_data.get("score", 0), 0, 100)
+        })
+
+    # hotness_score: 从overall_score映射
+    hotness_score = {
+        "score": clamp(score_data.get("total", 0), 0, 100),
+        "level": validate_enum(
+            score_data.get("level", ""), 
+            ["explosive", "high", "medium", "low"], 
+            "unknown"
+        ),
+        "factors": score_data.get("factors", {}),
+        "confidence": clamp(score_data.get("confidence", 0), 0, 1)
+    }
+
+    return {
+        "hotness_score": hotness_score,
+        "title_formulas": title_formulas or [{"name": "unknown", "description": "分析失败", "score": 0}],
+        "title_keywords": title_data.get("keywords", []),
+        "emotion_tags": emotion_tags,
+        "emotion_cocktail_type": validate_enum(
+            emotion_data.get("cocktail_type", ""),
+            ["fear_hope", "anger_curiosity", "nostalgia_surprise", "contrast_resonance", "other"],
+            "other"
+        ),
+        "emotion_intensity": clamp(emotion_data.get("intensity", 0), 0, 1),
+        "structure_template": {
+            "pattern": structure_data.get("pattern", "unknown"),
+            "sections": structure_data.get("sections", []),
+            "golden_ratio": structure_data.get("golden_ratio", {})
+        },
+        "interaction_hooks": llm_output.get("interaction_analysis", {}).get("hooks", []),
+        "topic_analysis": llm_output.get("topic_analysis", {}),
+        "platform_fit": llm_output.get("platform_fit", []),
+        "top_3_genes": score_data.get("top_3_genes", []),
+        "raw_content": llm_output.get("raw_content", "")
+    }
+
+# ---------- Step 3: 字段映射（改写结果） ----------
+
+def adapt_rewrite_result(llm_output: dict, platform: str) -> dict:
+    """将LLM改写输出适配为A03 RewriteResult格式"""
+    return {
+        "platform": platform,
+        "title": llm_output.get("rewritten_title", ""),
+        "content": llm_output.get("rewritten_content", ""),
+        "word_count": coerce_type(llm_output.get("word_count", 0), int, 0),
+        "similarity_score": clamp(llm_output.get("similarity_score", 0), 0, 100),
+        "quality_check": llm_output.get("self_check") or None
+    }
+
+# ---------- Step 4: 完整适配流程 ----------
+
+async def process_llm_analysis(raw_output: str) -> dict:
+    """完整适配流程：原始LLM字符串 → API响应"""
+    # Step 1
+    json_str = extract_json_from_llm(raw_output)
+    # Step 2
+    try:
+        data = json.loads(json_str)
+    except json.JSONDecodeError as e:
+        return {"error": f"LLM输出JSON解析失败: {e}", "fallback": True}
+    # Step 3 + 4
+    result = adapt_analysis_result(data)
+    return result
+```
+
+### 8.6 适配失败兜底策略
+
+| 场景 | 兜底方案 |
+|------|----------|
+| JSON 解析失败 | 记录原始输出到 `llm_raw_logs` 表，返回 `{"error": "分析失败", "fallback": true}` |
+| 必填字段全部缺失 | 标记该条分析为 `failed`，不写入 `analysis_results`，重试1次 |
+| 部分字段缺失 | 用默认值填充，标记 `is_partial: true` |
+| 枚举越界 | 用 `unknown` / `other` 兜底，记录日志 |
+| 分数越界 | clamp 到 0-100，记录日志 |
+| 适配成功但质量差 | 质量自检分数 < 60 时自动重试，最多2次 |
+
+### 8.7 适配层测试要求
+
+| 测试类型 | 说明 | 频率 |
+|----------|------|------|
+| 单元测试 | 每个映射函数，含正常/异常/边界case | 每次提交 |
+| 快照测试 | 真实LLM输出 → 适配后结果，存为快照对比 | Prompt变更时 |
+| 集成测试 | 完整流程：LLM调用 → 适配 → 接口返回 | 每日 |
+| 回归测试 | 旧Prompt输出仍能正确适配 | Prompt版本升级时 |
 | **批量合并** | 批量扫描时将多篇文章合并为一次 LLM 调用，减少请求次数 |
