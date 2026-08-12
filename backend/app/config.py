@@ -34,6 +34,16 @@ class Settings(BaseSettings):
     SEARCH_API_KEY: str = ""
     SEARCH_BASE_URL: str = ""
 
+    # ── B站采集 ──
+    BILIBILI_SESSDATA: str = ""  # B站 Cookie SESSDATA（可选，提高限额）
+
+    # ── 微博采集 ──
+    WEIBO_COOKIE: str = ""  # 微博 Cookie（可选）
+
+    # ── MediaCrawler 集成（可选高级模式）──
+    MEDIACRAWLER_PATH: str = ""  # MediaCrawler 项目路径
+    MEDIACRAWLER_ENABLED: bool = False
+
     # ── JWT ──
     JWT_SECRET: str = "change-me-in-production"
     JWT_ALGORITHM: str = "HS256"

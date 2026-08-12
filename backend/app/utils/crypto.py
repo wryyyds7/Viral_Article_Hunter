@@ -16,7 +16,7 @@ def _get_fernet() -> Fernet:
         salt=b"viral_article_hunter_salt",
         iterations=100_000,
     )
-    key = base64.urlsafe_b64encode(kdf.derive(settings.ENCRYPT_KEY.encode()))
+    key = base64.urlsafe_b64encode(kdf.derive(settings.ENCRYPTION_KEY.encode()))
     return Fernet(key)
 
 

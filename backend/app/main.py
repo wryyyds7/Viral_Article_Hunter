@@ -41,11 +41,53 @@ async def lifespan(app: FastAPI):
     # 注册事件处理器
     _register_event_handlers()
 
-    logger.info("爆文猎人启动完成，端口 %s", "5000")
+    # 启动异步任务队列 Worker
+    try:
+        from app.scheduler.worker import start_workers, stop_workers
+        await start_workers()
+        logger.info("任务队列 Worker 已启动")
+    except Exception as e:
+        logger.error("启动 Worker 失败: %s", e)
+
+    # 启动定时任务调度器
+    try:
+        from app.scheduler.cron import setup_cron_jobs, scheduler
+        setup_cron_jobs()
+        scheduler.start()
+        logger.info("定时任务调度器已启动")
+    except Exception as e:
+        logger.error("启动调度器失败: %s", e)
+
+    logger.info("爆文猎人启动完成，端口 %s", "8000")
     yield
 
     # ── Shutdown ──
     logger.info("爆文猎人关闭中...")
+
+    # 停止定时任务调度器
+    try:
+        from app.scheduler.cron import scheduler
+        if scheduler.running:
+            scheduler.shutdown(wait=False)
+            logger.info("定时任务调度器已停止")
+    except Exception as e:
+        logger.warning("停止调度器时出错: %s", e)
+
+    # 停止任务队列 Worker
+    try:
+        from app.scheduler.worker import stop_workers
+        await stop_workers()
+        logger.info("任务队列 Worker 已停止")
+    except Exception as e:
+        logger.warning("停止 Worker 时出错: %s", e)
+
+    # 关闭 HTTP 客户端连接池
+    try:
+        from app.utils.http_client import close_http_client
+        await close_http_client()
+    except Exception:
+        pass
+
     await engine.dispose()
     logger.info("数据库连接池已关闭")
 

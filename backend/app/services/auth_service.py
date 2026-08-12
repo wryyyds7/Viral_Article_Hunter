@@ -68,9 +68,14 @@ class AuthService:
             return user
 
     @staticmethod
-    async def login(username: str, password: str) -> tuple[User, str]:
+    async def login(username_or_email: str, password: str) -> tuple[User, str]:
         async with async_session() as db:
-            result = await db.execute(select(User).where(User.username == username))
+            # 支持用户名或邮箱登录
+            result = await db.execute(
+                select(User).where(
+                    (User.username == username_or_email) | (User.email == username_or_email)
+                )
+            )
             user = result.scalar_one_or_none()
 
             if not user or not AuthService.verify_password(password, user.hashed_password):

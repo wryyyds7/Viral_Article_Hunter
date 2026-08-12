@@ -16,16 +16,8 @@ router = APIRouter()
 @router.get("/platforms", response_model=ResponseBase[list[dict]])
 async def list_platforms():
     """查询支持的采集平台列表"""
-    platforms = [
-        {"id": "xiaohongshu", "name": "小红书", "enabled": False},
-        {"id": "zhihu", "name": "知乎", "enabled": False},
-        {"id": "weixin", "name": "微信公众号", "enabled": False},
-        {"id": "bilibili", "name": "B站", "enabled": False},
-        {"id": "douyin", "name": "抖音", "enabled": False},
-        {"id": "weibo", "name": "微博", "enabled": False},
-        {"id": "toutiao", "name": "今日头条", "enabled": False},
-        {"id": "baijiahao", "name": "百家号", "enabled": False},
-    ]
+    from app.collectors.generic import list_supported_platforms
+    platforms = list_supported_platforms()
     return ResponseBase(data=platforms)
 
 

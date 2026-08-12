@@ -15,7 +15,7 @@ class XiaohongshuCollector(BaseCollector):
         articles = []
         try:
             # RedFox API 调用
-            url = f"{settings.REDFOX_API_URL}/api/v1/xiaohongshu/search"
+            url = f"{settings.REDFOX_BASE_URL}/api/v1/xiaohongshu/search"
             params = {
                 "keyword": keyword,
                 "page": 1,

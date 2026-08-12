@@ -112,6 +112,25 @@ class RewriteService:
                 if similarity > 0.6:
                     logger.warning("相似度过高 %s: %.2f", platform, similarity)
 
+                # LLM 质量自检
+                quality_score = None
+                try:
+                    qc_messages = build_quality_check_prompt(
+                        article.title, article.content,
+                        adapted.get("title", ""), adapted.get("content", ""),
+                        platform,
+                    )
+                    qc_response = await llm_client.chat(
+                        messages=qc_messages,
+                        temperature=0.2,
+                        response_format={"type": "json_object"},
+                    )
+                    qc_raw = qc_response["choices"][0]["message"]["content"]
+                    import json
+                    quality_score = json.loads(qc_raw) if qc_raw.strip().startswith("{") else None
+                except Exception as qc_err:
+                    logger.debug("质量自检跳过 %s: %s", platform, qc_err)
+
                 # 存入结果
                 async with async_session() as db:
                     rewrite_result = RewriteResult(
@@ -121,6 +140,7 @@ class RewriteService:
                         content=adapted.get("content", ""),
                         similarity_score=similarity,
                         word_count=count_words(adapted.get("content", "")),
+                        quality_score=quality_score,
                         rewrite_notes=adapted.get("rewrite_notes"),
                         raw_llm_response={"raw": raw_text},
                         llm_model=response.get("model", llm_client.model),

@@ -14,7 +14,7 @@ class ZhihuCollector(BaseCollector):
         """通过 RedFox API 采集知乎内容"""
         articles = []
         try:
-            url = f"{settings.REDFOX_API_URL}/api/v1/zhihu/search"
+            url = f"{settings.REDFOX_BASE_URL}/api/v1/zhihu/search"
             params = {
                 "keyword": keyword,
                 "page": 1,

@@ -3,8 +3,9 @@ import { router } from './router';
 import {
   authApi, articleApi, analysisApi, rewriteApi, collectionApi,
   uploadApi, analyticsApi, adminApi, settingsApi,
-  type UserInfo, type Article, type AnalysisResult, type RewriteTask, type RewriteResult,
-  type CollectionTask, type AnalyticsOverview,
+  setAuthToken, getAuthToken,
+  type UserInfo, type Article, type AnalysisResult, type RewriteResult,
+  type CollectionTask,
 } from './api';
 
 // ============ State ============
@@ -28,79 +29,58 @@ function loadSavedUser(): void {
 
 // ============ Layout ============
 function renderLayout(content: string, activePath: string = '/'): void {
+  const navItems = [
+    { path: '/dashboard', label: '数据看板', icon: '📊' },
+    { path: '/collect', label: '热点采集', icon: '🔍' },
+    { path: '/articles', label: '素材库', icon: '📚' },
+    { path: '/upload', label: '文档上传', icon: '📄' },
+    { path: '/rewrite', label: '一键改写', icon: '✍️' },
+    { path: '/settings', label: '设置', icon: '⚙️' },
+  ];
+  if (currentUser?.role === 'admin') {
+    navItems.push({ path: '/admin', label: '管理后台', icon: '🛡️' });
+  }
+
   const app = document.getElementById('app');
   if (!app) return;
   app.innerHTML = `
-    <div class="flex h-screen overflow-hidden">
-      <!-- Sidebar -->
-      <aside class="w-60 flex-shrink-0 border-r flex flex-col" style="background:var(--sidebar-bg);border-color:var(--sidebar-border)">
-        <div class="p-5 border-b" style="border-color:var(--sidebar-border)">
-          <h1 class="text-lg font-bold" style="color:var(--primary)">
-            <span style="margin-right:6px">🔥</span>爆文猎人
-          </h1>
-          <p class="text-xs mt-1" style="color:var(--muted-foreground)">AI驱动的内容创作平台</p>
+    <div class="min-h-screen flex" style="background:var(--background)">
+      <aside class="w-60 flex-shrink-0 border-r flex flex-col" style="border-color:var(--border);background:var(--card)">
+        <div class="p-5 border-b" style="border-color:var(--border)">
+          <h1 class="text-xl font-bold" style="color:var(--primary)">🔥 爆文猎人</h1>
+          <p class="text-xs mt-1" style="color:var(--muted-foreground)">AI爆款内容创作平台</p>
         </div>
-        <nav class="flex-1 p-3 space-y-1">
-          <a href="#/dashboard" data-nav-link class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm cursor-pointer transition-colors ${activePath === '/dashboard' ? 'nav-active' : ''}">
-            <span>📊</span> 数据看板
-          </a>
-          <a href="#/collect" data-nav-link class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm cursor-pointer transition-colors ${activePath === '/collect' ? 'nav-active' : ''}">
-            <span>🔍</span> 热点采集
-          </a>
-          <a href="#/articles" data-nav-link class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm cursor-pointer transition-colors ${activePath === '/articles' ? 'nav-active' : ''}">
-            <span>📁</span> 素材库
-          </a>
-          <a href="#/upload" data-nav-link class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm cursor-pointer transition-colors ${activePath === '/upload' ? 'nav-active' : ''}">
-            <span>📤</span> 文档上传
-          </a>
-          <a href="#/rewrite" data-nav-link class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm cursor-pointer transition-colors ${activePath === '/rewrite' ? 'nav-active' : ''}">
-            <span>✍️</span> 一键改写
-          </a>
-          ${currentUser?.role === 'admin' ? `
-          <a href="#/admin" data-nav-link class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm cursor-pointer transition-colors ${activePath === '/admin' ? 'nav-active' : ''}">
-            <span>⚙️</span> 管理后台
-          </a>` : ''}
+        <nav class="flex-1 py-2">
+          ${navItems.map(item => `
+            <a href="#${item.path}" data-nav-link class="flex items-center gap-3 px-5 py-3 text-sm transition-colors hover:bg-gray-50 ${activePath === item.path ? 'nav-active' : ''}" style="${activePath === item.path ? 'color:var(--primary);font-weight:600;border-right:3px solid var(--primary)' : 'color:var(--muted-foreground)'}">
+              <span>${item.icon}</span> ${item.label}
+            </a>
+          `).join('')}
         </nav>
-        <div class="p-3 border-t" style="border-color:var(--sidebar-border)">
-          ${currentUser ? `
-          <div class="flex items-center gap-3 px-3 py-2">
-            <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium" style="background:var(--primary)">${currentUser.username[0].toUpperCase()}</div>
-            <div class="flex-1 min-w-0">
-              <div class="text-sm font-medium truncate">${currentUser.username}</div>
-              <div class="text-xs" style="color:var(--muted-foreground)">${currentUser.role === 'admin' ? '管理员' : '普通用户'}</div>
+        <div class="p-4 border-t" style="border-color:var(--border)">
+          <div class="flex items-center justify-between">
+            <div class="text-xs">
+              <p class="font-medium">${currentUser?.username || '未登录'}</p>
+              <p style="color:var(--muted-foreground)">${currentUser?.email || ''}</p>
             </div>
+            <button id="logout-btn" class="text-xs px-2 py-1 rounded hover:bg-gray-100" style="color:var(--muted-foreground)">退出</button>
           </div>
-          <button id="logout-btn" class="btn-ghost w-full text-xs mt-1" style="color:var(--muted-foreground)">退出登录</button>
-          ` : ''}
         </div>
       </aside>
-      <!-- Main Content -->
-      <main class="flex-1 overflow-y-auto" style="background:var(--background)">
-        <div class="p-6 max-w-6xl mx-auto fade-in">
-          ${content}
-        </div>
+      <main class="flex-1 p-8 overflow-auto">
+        ${content}
       </main>
     </div>
   `;
 
-  // Bind logout
-  document.getElementById('logout-btn')?.addEventListener('click', () => {
-    setCurrentUser(null);
-    router.navigate('/login');
-  });
-
-  // Style nav items
-  document.querySelectorAll('.nav-item').forEach(el => {
-    const hel = el as HTMLElement;
-    hel.addEventListener('mouseenter', () => { if (!hel.classList.contains('nav-active')) hel.style.background = 'var(--secondary)'; });
-    hel.addEventListener('mouseleave', () => { if (!hel.classList.contains('nav-active')) hel.style.background = 'transparent'; });
-  });
-  document.querySelectorAll('.nav-active').forEach(el => {
-    const hel = el as HTMLElement;
-    hel.style.background = '#eef2ff';
-    hel.style.color = 'var(--primary)';
-    hel.style.fontWeight = '600';
-  });
+  const logoutBtn = document.getElementById('logout-btn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+      setAuthToken(null);
+      setCurrentUser(null);
+      router.navigate('/login');
+    });
+  }
 }
 
 // ============ Login Page ============
@@ -119,11 +99,10 @@ function renderLogin(): void {
             <button id="tab-login" class="flex-1 py-3 text-sm font-medium border-b-2" style="border-color:var(--primary);color:var(--primary)">登录</button>
             <button id="tab-register" class="flex-1 py-3 text-sm font-medium" style="color:var(--muted-foreground)">注册</button>
           </div>
-          <!-- Login Form -->
           <form id="login-form" class="space-y-4">
             <div>
-              <label class="block text-sm font-medium mb-1">邮箱</label>
-              <input type="email" id="login-email" class="input" placeholder="请输入邮箱" required />
+              <label class="block text-sm font-medium mb-1">用户名 / 邮箱</label>
+              <input type="text" id="login-username" class="input" placeholder="输入用户名或邮箱" required />
             </div>
             <div>
               <label class="block text-sm font-medium mb-1">密码</label>
@@ -132,11 +111,10 @@ function renderLogin(): void {
             <div id="login-error" class="text-sm hidden" style="color:var(--destructive)"></div>
             <button type="submit" class="btn-primary w-full justify-center py-3">登录</button>
           </form>
-          <!-- Register Form -->
           <form id="register-form" class="space-y-4 hidden">
             <div>
               <label class="block text-sm font-medium mb-1">用户名</label>
-              <input type="text" id="reg-username" class="input" placeholder="请输入用户名" required />
+              <input type="text" id="reg-username" class="input" placeholder="字母、数字、下划线" required />
             </div>
             <div>
               <label class="block text-sm font-medium mb-1">邮箱</label>
@@ -179,14 +157,15 @@ function renderLogin(): void {
 
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
+    const username = (document.getElementById('login-username') as HTMLInputElement).value;
+    const password = (document.getElementById('login-password') as HTMLInputElement).value;
     const errEl = document.getElementById('login-error')!;
     errEl.classList.add('hidden');
+
     try {
-      const res = await authApi.login({
-        email: (document.getElementById('login-email') as HTMLInputElement).value,
-        password: (document.getElementById('login-password') as HTMLInputElement).value,
-      });
-      setCurrentUser(res.data);
+      const res = await authApi.login({ username, password });
+      setAuthToken(res.data.access_token);
+      setCurrentUser(res.data.user);
       router.navigate('/dashboard');
     } catch (err) {
       errEl.textContent = err instanceof Error ? err.message : '登录失败';
@@ -196,15 +175,16 @@ function renderLogin(): void {
 
   registerForm.addEventListener('submit', async (e) => {
     e.preventDefault();
+    const username = (document.getElementById('reg-username') as HTMLInputElement).value;
+    const email = (document.getElementById('reg-email') as HTMLInputElement).value;
+    const password = (document.getElementById('reg-password') as HTMLInputElement).value;
     const errEl = document.getElementById('register-error')!;
     errEl.classList.add('hidden');
+
     try {
-      const res = await authApi.register({
-        username: (document.getElementById('reg-username') as HTMLInputElement).value,
-        email: (document.getElementById('reg-email') as HTMLInputElement).value,
-        password: (document.getElementById('reg-password') as HTMLInputElement).value,
-      });
-      setCurrentUser(res.data);
+      const res = await authApi.register({ username, email, password });
+      setAuthToken(res.data.access_token);
+      setCurrentUser(res.data.user);
       router.navigate('/dashboard');
     } catch (err) {
       errEl.textContent = err instanceof Error ? err.message : '注册失败';
@@ -220,8 +200,11 @@ function renderDashboard(): void {
       <h2 class="text-2xl font-bold">数据看板</h2>
       <p class="text-sm mt-1" style="color:var(--muted-foreground)">概览您的创作数据</p>
     </div>
+    <div class="flex gap-2 mb-6">
+      ${['7d', '30d', '90d'].map(r => `<button class="btn-secondary dashboard-range" data-range="${r}">${r === '7d' ? '近7天' : r === '30d' ? '近30天' : '近90天'}</button>`).join('')}
+    </div>
     <div id="dashboard-stats" class="grid grid-cols-4 gap-4 mb-6">
-      ${['文章数', '分析次数', '改写次数', '采集任务'].map(label => `
+      ${['文章数', '分析次数', '改写次数', '平均热度'].map(label => `
         <div class="card text-center">
           <div class="skeleton h-8 w-16 mx-auto mb-2"></div>
           <div class="text-xs" style="color:var(--muted-foreground)">${label}</div>
@@ -238,60 +221,84 @@ function renderDashboard(): void {
         </div>
       </div>
       <div class="card">
-        <h3 class="font-semibold mb-4">热门文章 TOP5</h3>
-        <div id="top-articles" class="space-y-3">
-          <div class="skeleton h-10 w-full"></div>
-          <div class="skeleton h-10 w-full"></div>
-          <div class="skeleton h-10 w-full"></div>
+        <h3 class="font-semibold mb-4">热门标签</h3>
+        <div id="top-tags" class="flex flex-wrap gap-2">
+          <div class="skeleton h-8 w-20"></div>
+          <div class="skeleton h-8 w-16"></div>
+          <div class="skeleton h-8 w-24"></div>
         </div>
+      </div>
+    </div>
+    <div class="card mt-4">
+      <h3 class="font-semibold mb-4">采集趋势</h3>
+      <div id="collection-trend" class="space-y-2">
+        <div class="skeleton h-32 w-full"></div>
       </div>
     </div>
   `, '/dashboard');
 
-  // Load data
-  const userId = currentUser?.id || 'default';
-  analyticsApi.overview(userId).then(res => {
-    const stats = res.data;
-    document.getElementById('dashboard-stats')!.innerHTML = [
-      { label: '文章数', value: stats.article_count, color: '#6366f1' },
-      { label: '分析次数', value: stats.analysis_count, color: '#22c55e' },
-      { label: '改写次数', value: stats.rewrite_count, color: '#f59e0b' },
-      { label: '采集任务', value: stats.collection_count, color: '#3b82f6' },
-    ].map(s => `
-      <div class="card text-center">
-        <div class="text-2xl font-bold" style="color:${s.color}">${s.value}</div>
-        <div class="text-xs mt-1" style="color:var(--muted-foreground)">${s.label}</div>
-      </div>
-    `).join('');
+  let currentRange = '7d';
+  loadDashboard(currentRange);
 
-    // Platform distribution
-    const platformNames: Record<string, string> = { xiaohongshu: '小红书', zhihu: '知乎', wechat: '公众号', douyin: '抖音', bilibili: 'B站', weibo: '微博', toutiao: '头条', upload: '上传' };
-    const total = Object.values(stats.platform_distribution).reduce((a: number, b: number) => a + b, 0) || 1;
-    document.getElementById('platform-chart')!.innerHTML = Object.entries(stats.platform_distribution)
-      .sort(([, a]: [string, unknown], [, b]: [string, unknown]) => (b as number) - (a as number))
-      .map(([k, v]) => `
-        <div class="flex items-center gap-3">
-          <span class="text-sm w-16">${platformNames[k] || k}</span>
-          <div class="flex-1 h-6 rounded-full" style="background:var(--secondary)">
-            <div class="h-6 rounded-full flex items-center pl-2 text-xs text-white" style="width:${Math.max(8, ((v as number) / total) * 100)}%;background:var(--primary)">${v as number}</div>
-          </div>
-        </div>
-      `).join('') || '<p class="text-sm" style="color:var(--muted-foreground)">暂无数据</p>';
-  }).catch(() => {});
+  document.querySelectorAll('.dashboard-range').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentRange = (btn as HTMLElement).dataset.range!;
+      document.querySelectorAll('.dashboard-range').forEach(b => (b as HTMLElement).style.background = '');
+      (btn as HTMLElement).style.background = 'var(--primary)';
+      (btn as HTMLElement).style.color = 'white';
+      loadDashboard(currentRange);
+    });
+  });
+  // Highlight default
+  const firstBtn = document.querySelector('.dashboard-range') as HTMLElement;
+  if (firstBtn) { firstBtn.style.background = 'var(--primary)'; firstBtn.style.color = 'white'; }
 
-  analyticsApi.topArticles(5, userId).then(res => {
-    document.getElementById('top-articles')!.innerHTML = res.data.length > 0
-      ? res.data.map((a: Article, i: number) => `
-        <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer" data-article-id="${a.id}">
-          <span class="text-lg font-bold" style="color:${i < 3 ? 'var(--primary)' : 'var(--muted-foreground)'}">#${i + 1}</span>
-          <div class="flex-1 min-w-0">
-            <div class="text-sm font-medium truncate">${a.title}</div>
-            <div class="text-xs" style="color:var(--muted-foreground)">${a.source_platform} · 热度 ${a.hotness}</div>
-          </div>
+  async function loadDashboard(range: string) {
+    try {
+      const res = await analyticsApi.overview(range);
+      const d = res.data;
+      const platformNames: Record<string, string> = { xiaohongshu: '小红书', zhihu: '知乎', weixin: '公众号', douyin: '抖音', bilibili: 'B站', weibo: '微博', toutiao: '头条', upload: '上传' };
+      const statsHtml = [
+        { label: '文章数', value: d.total_articles },
+        { label: '分析次数', value: d.total_analyses },
+        { label: '改写次数', value: d.total_rewrites },
+        { label: '平均热度', value: d.avg_hotness_score?.toFixed(1) || '-' },
+      ].map(s => `
+        <div class="card text-center">
+          <div class="text-2xl font-bold" style="color:var(--primary)">${s.value}</div>
+          <div class="text-xs mt-1" style="color:var(--muted-foreground)">${s.label}</div>
         </div>
-      `).join('')
-      : '<p class="text-sm" style="color:var(--muted-foreground)">暂无数据，先采集或上传一些内容吧</p>';
-  }).catch(() => {});
+      `).join('');
+      document.getElementById('dashboard-stats')!.innerHTML = statsHtml;
+
+      const maxCount = Math.max(...(d.platform_distribution || []).map(p => p.count), 1);
+      document.getElementById('platform-chart')!.innerHTML = (d.platform_distribution || []).length > 0
+        ? d.platform_distribution.map(p => `
+          <div class="flex items-center gap-3">
+            <span class="text-sm w-20">${platformNames[p.platform] || p.platform}</span>
+            <div class="flex-1 bg-gray-100 rounded-full h-6 overflow-hidden">
+              <div class="h-full rounded-full" style="width:${(p.count / maxCount * 100)}%;background:var(--primary)"></div>
+            </div>
+            <span class="text-sm font-medium w-8 text-right">${p.count}</span>
+          </div>
+        `).join('')
+        : '<p class="text-sm" style="color:var(--muted-foreground)">暂无数据</p>';
+
+      document.getElementById('top-tags')!.innerHTML = (d.top_tags || []).length > 0
+        ? d.top_tags.map(t => `<span class="px-3 py-1 rounded-full text-xs" style="background:var(--primary);color:white">${t.tag} (${t.count})</span>`).join('')
+        : '<p class="text-sm" style="color:var(--muted-foreground)">暂无标签</p>';
+
+      const maxTrend = Math.max(...(d.collection_trend || []).map(t => t.count), 1);
+      document.getElementById('collection-trend')!.innerHTML = (d.collection_trend || []).length > 0
+        ? `<div class="flex items-end gap-1 h-32">${d.collection_trend.map(t => `
+            <div class="flex-1 flex flex-col items-center justify-end">
+              <div class="w-full rounded-t" style="height:${(t.count / maxTrend * 100)}%;background:var(--primary);min-height:4px" title="${t.date}: ${t.count}"></div>
+              <span class="text-xs mt-1" style="color:var(--muted-foreground)">${t.date.slice(5)}</span>
+            </div>
+          `).join('')}</div>`
+        : '<p class="text-sm" style="color:var(--muted-foreground)">暂无趋势数据</p>';
+    } catch { /* ignore */ }
+  }
 }
 
 // ============ Collection Page ============
@@ -314,7 +321,7 @@ function renderCollect(): void {
             ${[
               { id: 'xiaohongshu', name: '小红书' },
               { id: 'zhihu', name: '知乎' },
-              { id: 'wechat', name: '公众号' },
+              { id: 'weixin', name: '公众号' },
               { id: 'douyin', name: '抖音' },
               { id: 'bilibili', name: 'B站' },
               { id: 'weibo', name: '微博' },
@@ -328,7 +335,7 @@ function renderCollect(): void {
           </div>
         </div>
         <div>
-          <label class="block text-sm font-medium mb-1">采集数量</label>
+          <label class="block text-sm font-medium mb-1">采集数量（每平台）</label>
           <input type="number" id="collect-max" class="input" style="width:200px" value="20" min="1" max="50" />
         </div>
         <button type="submit" class="btn-primary">开始采集</button>
@@ -347,14 +354,10 @@ function renderCollect(): void {
     e.preventDefault();
     const keyword = (document.getElementById('collect-keyword') as HTMLInputElement).value;
     const platforms = Array.from(document.querySelectorAll('.platform-checkbox:checked')).map(cb => (cb as HTMLInputElement).value);
-    const maxResults = parseInt((document.getElementById('collect-max') as HTMLInputElement).value) || 20;
-
-    if (!keyword) return;
-    if (platforms.length === 0) { alert('请至少选择一个平台'); return; }
-
+    const maxResults = parseInt((document.getElementById('collect-max') as HTMLInputElement).value);
     try {
-      const res = await collectionApi.create({ user_id: currentUser?.id, keyword, platforms, max_results: maxResults });
-      alert(res.message || '采集任务已创建');
+      await collectionApi.createTask({ keyword, platforms, max_results: maxResults });
+      alert('采集任务已创建，正在后台执行');
       loadCollectHistory();
     } catch (err) {
       alert(err instanceof Error ? err.message : '创建失败');
@@ -363,19 +366,19 @@ function renderCollect(): void {
 
   async function loadCollectHistory() {
     try {
-      const res = await collectionApi.listTasks(currentUser?.id);
+      const res = await collectionApi.listTasks(1, 20);
       const statusColors: Record<string, string> = { completed: 'badge-success', running: 'badge-primary', failed: 'badge-destructive', pending: 'badge-warning' };
       const statusNames: Record<string, string> = { completed: '已完成', running: '进行中', failed: '失败', pending: '等待中', partial: '部分完成' };
-      document.getElementById('collect-history')!.innerHTML = res.data.length > 0
-        ? res.data.map((t: CollectionTask) => `
+      document.getElementById('collect-history')!.innerHTML = res.data.items.length > 0
+        ? res.data.items.map((t: CollectionTask) => `
           <div class="flex items-center justify-between p-3 rounded-lg border" style="border-color:var(--border)">
             <div>
-              <div class="font-medium text-sm">${t.keyword}</div>
-              <div class="text-xs mt-1" style="color:var(--muted-foreground)">${(t.platforms as string[]).join(', ')} · 采集 ${t.collected_count} 篇</div>
+              <p class="font-medium text-sm">${t.keyword}</p>
+              <p class="text-xs mt-1" style="color:var(--muted-foreground)">${t.platforms.join(', ')} · ${new Date(t.created_at).toLocaleString()}</p>
             </div>
             <div class="flex items-center gap-3">
-              <span class="badge ${statusColors[t.status] || 'badge-primary'}">${statusNames[t.status] || t.status}</span>
-              <span class="text-xs" style="color:var(--muted-foreground)">${new Date(t.created_at).toLocaleDateString()}</span>
+              <span class="text-sm font-medium">${t.collected_count} 篇</span>
+              <span class="badge ${statusColors[t.status] || 'badge-warning'}">${statusNames[t.status] || t.status}</span>
             </div>
           </div>
         `).join('')
@@ -411,36 +414,32 @@ function renderArticles(): void {
 
   async function loadArticles() {
     try {
-      const params: Record<string, string> = { page: currentPage.toString(), page_size: '20' };
+      const params: Record<string, string | number | boolean> = { page: currentPage, page_size: 20 };
       if (searchKeyword) params.keyword = searchKeyword;
-      if (currentUser) params.user_id = currentUser.id;
       const res = await articleApi.list(params);
-      const platformNames: Record<string, string> = { xiaohongshu: '小红书', zhihu: '知乎', wechat: '公众号', douyin: '抖音', bilibili: 'B站', weibo: '微博', toutiao: '头条', upload: '上传' };
+      const platformNames: Record<string, string> = { xiaohongshu: '小红书', zhihu: '知乎', weixin: '公众号', douyin: '抖音', bilibili: 'B站', weibo: '微博', toutiao: '头条', upload: '上传' };
 
       document.getElementById('articles-list')!.innerHTML = res.data.items.length > 0
         ? res.data.items.map((a: Article) => `
-          <div class="card flex items-start gap-4">
-            <div class="flex-1 min-w-0">
+          <div class="card flex items-center justify-between">
+            <div class="flex-1">
               <div class="flex items-center gap-2 mb-1">
-                <h3 class="font-medium text-sm truncate">${a.title}</h3>
-                ${a.is_favorited ? '<span class="text-xs" style="color:var(--warning)">★</span>' : ''}
-              </div>
-              <p class="text-xs line-clamp-2" style="color:var(--muted-foreground)">${a.summary || a.content?.substring(0, 100) + '...' || ''}</p>
-              <div class="flex items-center gap-3 mt-2">
                 <span class="badge badge-primary">${platformNames[a.source_platform] || a.source_platform}</span>
-                ${a.tags?.slice(0, 3).map((t: string) => `<span class="text-xs" style="color:var(--muted-foreground)">#${t}</span>`).join('') || ''}
-                <span class="text-xs" style="color:var(--muted-foreground)">热度 ${a.hotness}</span>
+                ${a.is_favorited ? '<span class="badge badge-warning">⭐ 已收藏</span>' : ''}
               </div>
+              <h3 class="font-medium text-sm">${a.title}</h3>
+              <p class="text-xs mt-1" style="color:var(--muted-foreground)">${a.summary || a.content.substring(0, 100)}...</p>
             </div>
-            <div class="flex gap-1 flex-shrink-0">
+            <div class="flex gap-2">
               <button class="btn-ghost text-xs" data-analyze-id="${a.id}">分析</button>
+              <button class="btn-ghost text-xs" data-view-id="${a.id}">详情</button>
               <button class="btn-ghost text-xs" data-fav-id="${a.id}">${a.is_favorited ? '取消收藏' : '收藏'}</button>
+              <button class="btn-ghost text-xs" data-del-id="${a.id}" style="color:var(--destructive)">删除</button>
             </div>
           </div>
         `).join('')
         : '<p class="text-sm" style="color:var(--muted-foreground)">暂无文章，去采集或上传一些内容吧</p>';
 
-      // Pagination
       const totalPages = Math.ceil(res.data.total / 20);
       document.getElementById('articles-pagination')!.innerHTML = totalPages > 1
         ? Array.from({ length: Math.min(totalPages, 5) }, (_, i) => `
@@ -448,29 +447,44 @@ function renderArticles(): void {
         `).join('')
         : '';
 
-      // Bind events
       document.querySelectorAll('[data-analyze-id]').forEach(btn => {
         btn.addEventListener('click', async () => {
-          const id = (btn as HTMLElement).dataset.analyzeId!;
+          const articleId = (btn as HTMLElement).dataset.analyzeId!;
           try {
-            btn.textContent = '分析中...';
-            await analysisApi.analyze({ article_id: id, user_id: currentUser?.id });
-            alert('分析完成！');
+            await analysisApi.batchAnalyze({ article_ids: [articleId] });
+            alert('分析已触发，请稍后查看结果');
+            router.navigate(`/analysis/${articleId}`);
           } catch (err) {
             alert(err instanceof Error ? err.message : '分析失败');
           }
         });
       });
 
+      document.querySelectorAll('[data-view-id]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const articleId = (btn as HTMLElement).dataset.viewId!;
+          router.navigate(`/analysis/${articleId}`);
+        });
+      });
+
       document.querySelectorAll('[data-fav-id]').forEach(btn => {
         btn.addEventListener('click', async () => {
-          const id = (btn as HTMLElement).dataset.favId!;
+          const articleId = (btn as HTMLElement).dataset.favId!;
           try {
-            await articleApi.toggleFavorite(id);
+            await articleApi.toggleFavorite(articleId);
             loadArticles();
-          } catch (err) {
-            alert(err instanceof Error ? err.message : '操作失败');
-          }
+          } catch { /* ignore */ }
+        });
+      });
+
+      document.querySelectorAll('[data-del-id]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const articleId = (btn as HTMLElement).dataset.delId!;
+          if (!confirm('确认删除？')) return;
+          try {
+            await articleApi.delete(articleId);
+            loadArticles();
+          } catch { /* ignore */ }
         });
       });
 
@@ -490,6 +504,146 @@ function renderArticles(): void {
   });
 
   loadArticles();
+}
+
+// ============ Analysis Detail Page ============
+function renderAnalysisDetail(articleId: string): void {
+  renderLayout(`
+    <div class="mb-6">
+      <a href="#/articles" class="text-sm" style="color:var(--muted-foreground)">← 返回素材库</a>
+      <h2 class="text-2xl font-bold mt-2">分析结果</h2>
+      <p class="text-sm mt-1" style="color:var(--muted-foreground)">文章爆款基因深度分析</p>
+    </div>
+    <div id="analysis-content">
+      <div class="skeleton h-96 w-full"></div>
+    </div>
+  `, '/articles');
+
+  async function loadAnalysis() {
+    const contentEl = document.getElementById('analysis-content')!;
+    try {
+      // 先获取文章信息
+      const articleRes = await articleApi.get(articleId);
+      const article = articleRes.data;
+
+      // 尝试获取分析结果
+      let analysis: AnalysisResult | null = null;
+      try {
+        const res = await analysisApi.get(articleId);
+        analysis = res.data;
+      } catch {
+        // 404 = 尚未分析
+      }
+
+      if (!analysis) {
+        contentEl.innerHTML = `
+          <div class="card text-center py-12">
+            <p class="text-lg font-medium mb-2">该文章尚未分析</p>
+            <p class="text-sm mb-4" style="color:var(--muted-foreground)">文章标题：${article.title}</p>
+            <button id="trigger-analysis" class="btn-primary">触发爆款分析</button>
+          </div>
+        `;
+        document.getElementById('trigger-analysis')!.addEventListener('click', async () => {
+          try {
+            await analysisApi.batchAnalyze({ article_ids: [articleId] });
+            alert('分析已触发，请等待几秒后刷新');
+            setTimeout(() => loadAnalysis(), 2000);
+          } catch (err) {
+            alert(err instanceof Error ? err.message : '分析失败');
+          }
+        });
+        return;
+      }
+
+      const levelColors: Record<string, string> = { S: '#ef4444', A: '#f97316', B: '#eab308', C: '#22c55e', D: '#94a3b8' };
+      const platformNames: Record<string, string> = { xiaohongshu: '小红书', zhihu: '知乎', weixin: '公众号', douyin: '抖音', bilibili: 'B站', weibo: '微博', toutiao: '头条' };
+
+      contentEl.innerHTML = `
+        <div class="card mb-4">
+          <h3 class="font-semibold mb-2">${article.title}</h3>
+          <p class="text-sm" style="color:var(--muted-foreground)">${article.summary || ''}</p>
+        </div>
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <div class="card">
+            <h3 class="font-semibold mb-3">热度评分</h3>
+            <div class="flex items-center gap-4">
+              <div class="text-4xl font-bold" style="color:${levelColors[analysis.hotness_score.level] || 'var(--primary)'}">${analysis.hotness_score.level}</div>
+              <div>
+                <div class="text-2xl font-bold">${analysis.hotness_score.score}</div>
+                <div class="text-xs" style="color:var(--muted-foreground)">满分100</div>
+              </div>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-1">
+              ${analysis.hotness_score.factors.map(f => `<span class="badge badge-warning">${f}</span>`).join('')}
+            </div>
+          </div>
+          <div class="card">
+            <h3 class="font-semibold mb-3">情绪标签</h3>
+            <div class="flex flex-wrap gap-2">
+              ${analysis.emotion_tags.map(t => `<span class="badge badge-primary">${t}</span>`).join('')}
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <div class="card">
+            <h3 class="font-semibold mb-3">标题公式</h3>
+            <div class="space-y-2">
+              ${analysis.title_formulas.map(tf => `
+                <div class="flex items-center justify-between">
+                  <span class="text-sm">${tf.name}</span>
+                  <div class="flex items-center gap-2">
+                    <div class="w-24 bg-gray-100 rounded-full h-2"><div class="h-full rounded-full" style="width:${tf.confidence * 100}%;background:var(--primary)"></div></div>
+                    <span class="text-xs">${(tf.confidence * 100).toFixed(0)}%</span>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          <div class="card">
+            <h3 class="font-semibold mb-3">Top 3 爆款基因</h3>
+            <div class="space-y-2">
+              ${analysis.top_3_genes.map(g => `
+                <div class="flex items-start gap-3">
+                  <span class="badge badge-primary">${g.rank}</span>
+                  <div>
+                    <p class="text-sm font-medium">${g.gene}</p>
+                    <p class="text-xs" style="color:var(--muted-foreground)">${g.reason}</p>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+        <div class="card mb-4">
+          <h3 class="font-semibold mb-3">结构模板</h3>
+          <pre class="text-xs overflow-auto p-3 rounded" style="background:var(--background);color:var(--muted-foreground)">${JSON.stringify(analysis.structure_template, null, 2)}</pre>
+        </div>
+        <div class="card">
+          <h3 class="font-semibold mb-3">平台适配度</h3>
+          <div class="space-y-3">
+            ${analysis.platform_fit.map(pf => `
+              <div class="flex items-center gap-3">
+                <span class="text-sm w-20">${platformNames[pf.platform] || pf.platform}</span>
+                <div class="flex-1 bg-gray-100 rounded-full h-6 overflow-hidden">
+                  <div class="h-full rounded-full flex items-center justify-end pr-2" style="width:${pf.fit_score}%;background:var(--primary)">
+                    <span class="text-xs text-white font-medium">${pf.fit_score}</span>
+                  </div>
+                </div>
+              </div>
+              <p class="text-xs pl-23" style="color:var(--muted-foreground)">${pf.reason}</p>
+            `).join('')}
+          </div>
+        </div>
+        <div class="mt-4 text-center">
+          <p class="text-xs" style="color:var(--muted-foreground)">分析模型: ${analysis.llm_model || '-'} · 消耗Token: ${analysis.llm_tokens_used || 0} · 时间: ${new Date(analysis.created_at).toLocaleString()}</p>
+          <a href="#/rewrite" class="btn-primary inline-block mt-3">去改写这篇文章</a>
+        </div>
+      `;
+    } catch (err) {
+      contentEl.innerHTML = `<p class="text-sm" style="color:var(--destructive)">加载失败: ${err instanceof Error ? err.message : 'Unknown'}</p>`;
+    }
+  }
+  loadAnalysis();
 }
 
 // ============ Upload Page ============
@@ -551,13 +705,12 @@ function renderUpload(): void {
     fileCountEl.textContent = `已选择 ${selectedFiles.length} 个文件${selectedFiles.length < 10 ? '（未达10篇阈值，分析结果可能不够准确）' : '（已达分析阈值）'}`;
 
     fileList.innerHTML = selectedFiles.map((f, i) => `
-      <div class="flex items-center justify-between p-2 rounded-lg border" style="border-color:var(--border)">
+      <div class="flex items-center justify-between p-2 rounded border" style="border-color:var(--border)">
+        <span class="text-sm">${f.name}</span>
         <div class="flex items-center gap-2">
-          <span class="text-sm">📄</span>
-          <span class="text-sm">${f.name}</span>
           <span class="text-xs" style="color:var(--muted-foreground)">${(f.size / 1024).toFixed(1)}KB</span>
+          <button class="text-xs" data-remove="${i}" style="color:var(--destructive)">移除</button>
         </div>
-        <button class="btn-ghost text-xs" data-remove="${i}">移除</button>
       </div>
     `).join('');
 
@@ -570,41 +723,29 @@ function renderUpload(): void {
   }
 
   uploadBtn.addEventListener('click', async () => {
-    if (selectedFiles.length === 0) return;
     uploadBtn.disabled = true;
-    uploadBtn.textContent = '上传解析中...';
-
+    uploadBtn.textContent = '上传中...';
     try {
-      const files = await Promise.all(selectedFiles.map(async f => ({
-        name: f.name,
-        format: f.name.split('.').pop() || 'txt',
-        size: f.size,
-        content: await f.text(),
-      })));
-
-      const res = await uploadApi.batch({ user_id: currentUser?.id, files });
+      const res = await uploadApi.uploadFiles(selectedFiles);
       const resultEl = document.getElementById('upload-result')!;
       resultEl.classList.remove('hidden');
       resultEl.innerHTML = `
         <h3 class="font-semibold mb-3">上传结果</h3>
         <div class="grid grid-cols-3 gap-4 mb-4">
-          <div class="text-center"><div class="text-xl font-bold">${res.data.total_count}</div><div class="text-xs" style="color:var(--muted-foreground)">总计</div></div>
-          <div class="text-center"><div class="text-xl font-bold" style="color:var(--success)">${res.data.success_count}</div><div class="text-xs" style="color:var(--muted-foreground)">成功</div></div>
-          <div class="text-center"><div class="text-xl font-bold" style="color:var(--destructive)">${res.data.fail_count}</div><div class="text-xs" style="color:var(--muted-foreground)">失败</div></div>
+          <div class="text-center"><div class="text-2xl font-bold">${res.data.total_count}</div><div class="text-xs" style="color:var(--muted-foreground)">总文件数</div></div>
+          <div class="text-center"><div class="text-2xl font-bold" style="color:var(--success)">${res.data.success_count}</div><div class="text-xs" style="color:var(--muted-foreground)">成功</div></div>
+          <div class="text-center"><div class="text-2xl font-bold" style="color:var(--destructive)">${res.data.fail_count}</div><div class="text-xs" style="color:var(--muted-foreground)">失败</div></div>
         </div>
-        <p class="text-sm" style="color:${res.data.threshold_met ? 'var(--success)' : 'var(--warning)'}">
-          ${res.message}
-        </p>
+        <p class="text-sm">${res.message}</p>
       `;
-
       selectedFiles = [];
       renderFileList();
-      fileInput.value = '';
     } catch (err) {
       alert(err instanceof Error ? err.message : '上传失败');
+    } finally {
+      uploadBtn.disabled = false;
+      uploadBtn.textContent = '开始上传';
     }
-    uploadBtn.disabled = false;
-    uploadBtn.textContent = '开始上传';
   });
 }
 
@@ -630,7 +771,7 @@ function renderRewrite(): void {
             ${[
               { id: 'xiaohongshu', name: '小红书' },
               { id: 'zhihu', name: '知乎' },
-              { id: 'wechat', name: '公众号' },
+              { id: 'weixin', name: '公众号' },
               { id: 'douyin', name: '抖音' },
               { id: 'bilibili', name: 'B站' },
               { id: 'weibo', name: '微博' },
@@ -651,10 +792,13 @@ function renderRewrite(): void {
   `, '/rewrite');
 
   // Load articles for select
-  articleApi.list({ page: 1, page_size: 50, user_id: currentUser?.id || 'default' }).then(res => {
+  articleApi.list({ page: 1, page_size: 50 }).then(res => {
     const select = document.getElementById('rewrite-article') as HTMLSelectElement;
     select.innerHTML = '<option value="">请选择文章</option>' + res.data.items.map((a: Article) => `<option value="${a.id}">${a.title}</option>`).join('');
-  }).catch(() => {});
+  }).catch(() => {
+    const select = document.getElementById('rewrite-article') as HTMLSelectElement;
+    select.innerHTML = '<option value="">加载失败</option>';
+  });
 
   document.getElementById('rewrite-form')!.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -666,95 +810,231 @@ function renderRewrite(): void {
 
     try {
       // Create task
-      const taskRes = await rewriteApi.createTask({ article_id: articleId, target_platforms: platforms, user_id: currentUser?.id });
+      const taskRes = await rewriteApi.createTask({ article_id: articleId, target_platforms: platforms });
       const taskId = taskRes.data.id;
 
       // Show progress
       const progressEl = document.getElementById('rewrite-progress')!;
       progressEl.classList.remove('hidden');
+      const platformNames: Record<string, string> = { xiaohongshu: '小红书', zhihu: '知乎', weixin: '公众号', douyin: '抖音', bilibili: 'B站', weibo: '微博', toutiao: '头条' };
       progressEl.innerHTML = `
         <h3 class="font-semibold mb-3">改写进度</h3>
         <div id="rewrite-progress-items" class="space-y-2">
-          ${platforms.map(p => `<div id="progress-${p}" class="flex items-center gap-2"><span class="skeleton h-4 w-4 rounded-full inline-block"></span><span class="text-sm">${p} 改写中...</span></div>`).join('')}
+          ${platforms.map(p => `<div id="progress-${p}" class="flex items-center gap-2"><span class="skeleton h-4 w-4 rounded-full inline-block"></span><span class="text-sm">${platformNames[p] || p} 改写中...</span></div>`).join('')}
         </div>
       `;
 
-      // Execute task (POST for SSE-like)
+      // SSE: poll for results via stream endpoint
       const results: RewriteResult[] = [];
-      for (let i = 0; i < platforms.length; i++) {
-        const p = platforms[i];
-        const progressItem = document.getElementById(`progress-${p}`);
-        if (progressItem) {
-          progressItem.innerHTML = `<span class="inline-block w-4 h-4 rounded-full" style="background:var(--warning)"></span><span class="text-sm">${p} 改写中...</span>`;
-        }
-      }
+      const eventSource = new EventSource(rewriteApi.streamUrl(taskId));
 
-      // Call execute
-      const execRes = await fetch(`/api/v1/rewrite/tasks/${taskId}/execute`, { method: 'POST' });
-      if (execRes.ok) {
-        const reader = execRes.body?.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        while (reader) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const event = JSON.parse(line.slice(6));
-                if (event.platform) {
-                  const pi = document.getElementById(`progress-${event.platform}`);
-                  if (pi && event.result) {
-                    pi.innerHTML = `<span class="inline-block w-4 h-4 rounded-full" style="background:var(--success)"></span><span class="text-sm">${event.platform} 完成</span>`;
-                    results.push(event.result);
-                  }
-                }
-              } catch { /* ignore parse errors */ }
-            }
+      eventSource.addEventListener('result', (ev) => {
+        try {
+          const data = JSON.parse(ev.data);
+          results.push(data);
+          const pi = document.getElementById(`progress-${data.platform}`);
+          if (pi) {
+            pi.innerHTML = `<span class="inline-block w-4 h-4 rounded-full" style="background:var(--success)"></span><span class="text-sm">${platformNames[data.platform] || data.platform} 完成 ✓</span>`;
           }
+        } catch { /* ignore */ }
+      });
+
+      eventSource.addEventListener('done', () => {
+        try {
+          eventSource.close();
+          // Fetch full results
+          loadResults(taskId);
+        } catch {
+          eventSource.close();
+          loadResults(taskId);
         }
-      }
+      });
 
-      // Also fetch results via REST as fallback
-      const resResults = await rewriteApi.getResults(taskId);
+      eventSource.addEventListener('error', () => {
+        eventSource.close();
+        // Fallback: try REST API
+        loadResults(taskId);
+      });
 
-      // Render results
+      eventSource.addEventListener('timeout', () => {
+        eventSource.close();
+        alert('改写超时，请稍后查看结果');
+        loadResults(taskId);
+      });
+
+      // Also poll REST as fallback after 5s
+      setTimeout(() => {
+        if (results.length < platforms.length) {
+          loadResults(taskId);
+        }
+      }, 60000);
+
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '改写失败');
+    }
+  });
+
+  async function loadResults(taskId: string) {
+    try {
+      const res = await rewriteApi.getTask(taskId);
+      const platformNames: Record<string, string> = { xiaohongshu: '小红书', zhihu: '知乎', weixin: '公众号', douyin: '抖音', bilibili: 'B站', weibo: '微博', toutiao: '头条' };
       const resultsEl = document.getElementById('rewrite-results')!;
-      const platformNames: Record<string, string> = { xiaohongshu: '小红书', zhihu: '知乎', wechat: '公众号', douyin: '抖音', bilibili: 'B站', weibo: '微博', toutiao: '头条' };
-      resultsEl.innerHTML = resResults.data.map(r => `
-        <div class="card">
-          <div class="flex items-center justify-between mb-3">
-            <span class="badge badge-primary">${platformNames[r.platform] || r.platform}</span>
-            <span class="text-xs" style="color:var(--muted-foreground)">相似度 ${(r.similarity_score * 100).toFixed(0)}% · ${r.word_count}字</span>
+      resultsEl.innerHTML = res.data.results.length > 0
+        ? res.data.results.map(r => `
+          <div class="card">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-semibold">${platformNames[r.platform] || r.platform}</h3>
+              <div class="flex gap-2">
+                <span class="badge badge-warning">相似度 ${(r.similarity_score * 100).toFixed(0)}%</span>
+                <span class="text-xs" style="color:var(--muted-foreground)">${r.word_count} 字</span>
+              </div>
+            </div>
+            <p class="font-medium text-sm mb-2">${r.title}</p>
+            <div class="text-sm whitespace-pre-wrap p-3 rounded" style="background:var(--background)">${r.content}</div>
+            <div class="flex gap-2 mt-3">
+              <button class="btn-secondary text-xs" data-copy="${r.id}">复制内容</button>
+            </div>
           </div>
-          <h4 class="font-semibold mb-2">${r.title}</h4>
-          <div class="text-sm whitespace-pre-wrap" style="color:var(--muted-foreground)">${r.content}</div>
-          <div class="mt-3">
-            <button class="btn-secondary text-xs" data-copy="${r.id}">复制内容</button>
-          </div>
-        </div>
-      `).join('');
+        `).join('')
+        : '<p class="text-sm" style="color:var(--muted-foreground)">暂无改写结果</p>';
 
-      // Copy buttons
       resultsEl.querySelectorAll('[data-copy]').forEach(btn => {
         btn.addEventListener('click', () => {
           const rId = (btn as HTMLElement).dataset.copy!;
-          const result = resResults.data.find(r => r.id === rId);
+          const result = res.data.results.find(r => r.id === rId);
           if (result) {
-            navigator.clipboard.writeText(result.title + '\n\n' + result.content);
-            (btn as HTMLElement).textContent = '已复制';
-            setTimeout(() => { (btn as HTMLElement).textContent = '复制内容'; }, 2000);
+            navigator.clipboard.writeText(`${result.title}\n\n${result.content}`);
+            alert('已复制到剪贴板');
           }
         });
       });
     } catch (err) {
-      alert(err instanceof Error ? err.message : '改写失败');
+      alert(err instanceof Error ? err.message : '获取结果失败');
+    }
+  }
+}
+
+// ============ Settings Page ============
+function renderSettings(): void {
+  renderLayout(`
+    <div class="mb-6">
+      <h2 class="text-2xl font-bold">设置</h2>
+      <p class="text-sm mt-1" style="color:var(--muted-foreground)">管理您的账户和偏好设置</p>
+    </div>
+    <div class="grid grid-cols-2 gap-4">
+      <div class="card">
+        <h3 class="font-semibold mb-4">个人信息</h3>
+        <form id="profile-form" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium mb-1">用户名</label>
+            <input type="text" id="settings-username" class="input" value="${currentUser?.username || ''}" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">邮箱</label>
+            <input type="email" id="settings-email" class="input" value="${currentUser?.email || ''}" />
+          </div>
+          <button type="submit" class="btn-primary">保存</button>
+        </form>
+      </div>
+      <div class="card">
+        <h3 class="font-semibold mb-4">修改密码</h3>
+        <form id="password-form" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium mb-1">当前密码</label>
+            <input type="password" id="old-password" class="input" required />
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">新密码</label>
+            <input type="password" id="new-password" class="input" placeholder="至少6位" required />
+          </div>
+          <button type="submit" class="btn-primary">修改密码</button>
+        </form>
+      </div>
+    </div>
+    <div class="card mt-4">
+      <h3 class="font-semibold mb-4">偏好设置</h3>
+      <form id="preferences-form" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium mb-2">默认采集平台</label>
+          <div class="flex flex-wrap gap-2">
+            ${[
+              { id: 'xiaohongshu', name: '小红书' },
+              { id: 'zhihu', name: '知乎' },
+              { id: 'weixin', name: '公众号' },
+              { id: 'douyin', name: '抖音' },
+              { id: 'bilibili', name: 'B站' },
+              { id: 'weibo', name: '微博' },
+              { id: 'toutiao', name: '头条' },
+            ].map(p => `
+              <label class="flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer hover:bg-gray-50" style="border-color:var(--border)">
+                <input type="checkbox" value="${p.id}" class="pref-platform-cb" />
+                <span class="text-sm">${p.name}</span>
+              </label>
+            `).join('')}
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="checkbox" id="pref-auto-analyze" class="rounded" />
+          <label class="text-sm" for="pref-auto-analyze">采集/上传后自动触发爆款分析</label>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="checkbox" id="pref-notification" class="rounded" />
+          <label class="text-sm" for="pref-notification">开启通知提醒</label>
+        </div>
+        <button type="submit" class="btn-primary">保存偏好</button>
+      </form>
+    </div>
+  `, '/settings');
+
+  // Load settings
+  settingsApi.get().then(res => {
+    const s = res.data;
+    if (s.default_platforms) {
+      s.default_platforms.forEach(p => {
+        const cb = document.querySelector(`.pref-platform-cb[value="${p}"]`) as HTMLInputElement;
+        if (cb) cb.checked = true;
+      });
+    }
+    if (s.auto_analyze !== undefined) (document.getElementById('pref-auto-analyze') as HTMLInputElement).checked = s.auto_analyze;
+    if (s.notification_enabled !== undefined) (document.getElementById('pref-notification') as HTMLInputElement).checked = s.notification_enabled;
+  }).catch(() => {});
+
+  // Profile form
+  document.getElementById('profile-form')!.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    // Python backend uses PUT /settings/ for user settings, profile update via auth
+    alert('个人信息修改功能即将上线');
+  });
+
+  // Password form
+  document.getElementById('password-form')!.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const oldPwd = (document.getElementById('old-password') as HTMLInputElement).value;
+    const newPwd = (document.getElementById('new-password') as HTMLInputElement).value;
+    try {
+      await authApi.changePassword({ old_password: oldPwd, new_password: newPwd });
+      alert('密码修改成功');
+      (document.getElementById('password-form') as HTMLFormElement).reset();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '修改失败');
+    }
+  });
+
+  // Preferences form
+  document.getElementById('preferences-form')!.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const platforms = Array.from(document.querySelectorAll('.pref-platform-cb:checked')).map(cb => (cb as HTMLInputElement).value);
+    const autoAnalyze = (document.getElementById('pref-auto-analyze') as HTMLInputElement).checked;
+    const notification = (document.getElementById('pref-notification') as HTMLInputElement).checked;
+    try {
+      await settingsApi.update({
+        default_platforms: platforms,
+        auto_analyze: autoAnalyze,
+        notification_enabled: notification,
+      });
+      alert('偏好设置已保存');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '保存失败');
     }
   });
 }
@@ -775,17 +1055,21 @@ function renderAdmin(): void {
       <button class="btn-secondary admin-tab" data-tab="users" style="background:var(--primary);color:white;border-color:var(--primary)">用户管理</button>
       <button class="btn-secondary admin-tab" data-tab="audit">操作审计</button>
       <button class="btn-secondary admin-tab" data-tab="config">系统配置</button>
+      <button class="btn-secondary admin-tab" data-tab="monitor">系统监控</button>
     </div>
     <div id="admin-content"></div>
   `, '/admin');
 
   document.querySelectorAll('.admin-tab').forEach(tab => {
-    const htab = tab as HTMLElement;
-    htab.addEventListener('click', () => {
-      document.querySelectorAll('.admin-tab').forEach(t => { const ht = t as HTMLElement; ht.style.background = ''; ht.style.color = ''; ht.style.borderColor = ''; });
-      htab.style.background = 'var(--primary)';
-      htab.style.color = 'white';
-      htab.style.borderColor = 'var(--primary)';
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.admin-tab').forEach(t => {
+        (t as HTMLElement).style.background = '';
+        (t as HTMLElement).style.color = '';
+        (t as HTMLElement).style.borderColor = '';
+      });
+      (tab as HTMLElement).style.background = 'var(--primary)';
+      (tab as HTMLElement).style.color = 'white';
+      (tab as HTMLElement).style.borderColor = 'var(--primary)';
       loadAdminTab((tab as HTMLElement).dataset.tab!);
     });
   });
@@ -796,7 +1080,7 @@ function renderAdmin(): void {
     const content = document.getElementById('admin-content')!;
     if (tab === 'users') {
       try {
-        const res = await adminApi.listUsers();
+        const res = await adminApi.listUsers({ page: 1, page_size: 50 });
         content.innerHTML = `
           <div class="card">
             <table class="w-full text-sm">
@@ -805,56 +1089,28 @@ function renderAdmin(): void {
                 <th class="text-left py-3 font-medium">邮箱</th>
                 <th class="text-left py-3 font-medium">角色</th>
                 <th class="text-left py-3 font-medium">状态</th>
-                <th class="text-left py-3 font-medium">操作</th>
+                <th class="text-left py-3 font-medium">注册时间</th>
               </tr></thead>
               <tbody>
-                ${res.data.items.map((u: UserInfo) => `
+                ${res.data.items.map((u) => `
                   <tr class="border-b" style="border-color:var(--border)">
-                    <td class="py-3">${u.username}</td>
+                    <td class="py-3 font-medium">${u.username}</td>
                     <td class="py-3" style="color:var(--muted-foreground)">${u.email}</td>
-                    <td class="py-3"><span class="badge ${u.role === 'admin' ? 'badge-primary' : 'badge-warning'}">${u.role === 'admin' ? '管理员' : '用户'}</span></td>
-                    <td class="py-3"><span class="badge ${u.status === 'active' ? 'badge-success' : 'badge-destructive'}">${u.status === 'active' ? '正常' : '封禁'}</span></td>
-                    <td class="py-3">
-                      <button class="btn-ghost text-xs" data-toggle-status="${u.id}" data-status="${u.status}">${u.status === 'active' ? '封禁' : '解封'}</button>
-                      <button class="btn-ghost text-xs" data-toggle-role="${u.id}" data-role="${u.role}">${u.role === 'admin' ? '降为用户' : '升为管理员'}</button>
-                    </td>
+                    <td class="py-3"><span class="badge ${u.role === 'admin' ? 'badge-warning' : 'badge-primary'}">${u.role}</span></td>
+                    <td class="py-3"><span class="badge ${u.status === 'active' ? 'badge-success' : 'badge-destructive'}">${u.status}</span></td>
+                    <td class="py-3" style="color:var(--muted-foreground)">${new Date(u.created_at).toLocaleDateString()}</td>
                   </tr>
                 `).join('')}
               </tbody>
             </table>
           </div>
         `;
-
-        content.querySelectorAll('[data-toggle-status]').forEach(btn => {
-          btn.addEventListener('click', async () => {
-            const id = (btn as HTMLElement).dataset.toggleStatus!;
-            const currentStatus = (btn as HTMLElement).dataset.status!;
-            const newStatus = currentStatus === 'active' ? 'banned' : 'active';
-            try {
-              await adminApi.updateUserStatus(id, newStatus, currentUser!.id);
-              loadAdminTab('users');
-            } catch (err) { alert(err instanceof Error ? err.message : '操作失败'); }
-          });
-        });
-
-        content.querySelectorAll('[data-toggle-role]').forEach(btn => {
-          btn.addEventListener('click', async () => {
-            const id = (btn as HTMLElement).dataset.toggleRole!;
-            const currentRole = (btn as HTMLElement).dataset.role!;
-            const newRole = currentRole === 'admin' ? 'user' : 'admin';
-            if (!confirm(`确定将用户角色更改为${newRole === 'admin' ? '管理员' : '普通用户'}？`)) return;
-            try {
-              await adminApi.updateUserRole(id, newRole, currentUser!.id);
-              loadAdminTab('users');
-            } catch (err) { alert(err instanceof Error ? err.message : '操作失败'); }
-          });
-        });
       } catch (err) {
         content.innerHTML = `<p class="text-sm" style="color:var(--destructive)">加载失败: ${err instanceof Error ? err.message : 'Unknown'}</p>`;
       }
     } else if (tab === 'audit') {
       try {
-        const res = await adminApi.getAuditLog();
+        const res = await adminApi.listAuditLogs({ page: 1, page_size: 50 });
         content.innerHTML = `
           <div class="card">
             <table class="w-full text-sm">
@@ -862,15 +1118,13 @@ function renderAdmin(): void {
                 <th class="text-left py-3 font-medium">时间</th>
                 <th class="text-left py-3 font-medium">操作</th>
                 <th class="text-left py-3 font-medium">目标</th>
-                <th class="text-left py-3 font-medium">IP</th>
               </tr></thead>
               <tbody>
-                ${res.data.items.map((l: { created_at: string; action: string; target_type: string; target_id: string; ip_address: string }) => `
+                ${res.data.items.map((l) => `
                   <tr class="border-b" style="border-color:var(--border)">
                     <td class="py-3" style="color:var(--muted-foreground)">${new Date(l.created_at).toLocaleString()}</td>
                     <td class="py-3">${l.action}</td>
                     <td class="py-3">${l.target_type}/${l.target_id?.substring(0, 8)}</td>
-                    <td class="py-3" style="color:var(--muted-foreground)">${l.ip_address}</td>
                   </tr>
                 `).join('')}
               </tbody>
@@ -880,21 +1134,21 @@ function renderAdmin(): void {
       } catch { content.innerHTML = '<p class="text-sm" style="color:var(--muted-foreground)">暂无审计记录</p>'; }
     } else if (tab === 'config') {
       try {
-        const res = await adminApi.getSystemConfig();
+        const res = await adminApi.listConfigs();
         content.innerHTML = `
           <div class="card">
             <table class="w-full text-sm">
               <thead><tr class="border-b" style="border-color:var(--border)">
                 <th class="text-left py-3 font-medium">配置项</th>
                 <th class="text-left py-3 font-medium">当前值</th>
-                <th class="text-left py-3 font-medium">描述</th>
+                <th class="text-left py-3 font-medium">分组</th>
               </tr></thead>
               <tbody>
-                ${res.data.map((c: { key: string; value: unknown; description?: string }) => `
+                ${res.data.map((c) => `
                   <tr class="border-b" style="border-color:var(--border)">
                     <td class="py-3 font-mono text-xs">${c.key}</td>
                     <td class="py-3">${JSON.stringify(c.value)}</td>
-                    <td class="py-3" style="color:var(--muted-foreground)">${c.description || '-'}</td>
+                    <td class="py-3" style="color:var(--muted-foreground)">${c.config_group || '-'}</td>
                   </tr>
                 `).join('')}
               </tbody>
@@ -902,6 +1156,30 @@ function renderAdmin(): void {
           </div>
         `;
       } catch { content.innerHTML = '<p class="text-sm" style="color:var(--muted-foreground)">加载失败</p>'; }
+    } else if (tab === 'monitor') {
+      try {
+        const res = await adminApi.getMonitor();
+        const m = res.data;
+        content.innerHTML = `
+          <div class="grid grid-cols-3 gap-4">
+            ${[
+              { label: '总用户数', value: m.total_users },
+              { label: '24h活跃', value: m.active_users_24h },
+              { label: '文章总数', value: m.total_articles },
+              { label: '分析总数', value: m.total_analyses },
+              { label: '改写总数', value: m.total_rewrites },
+              { label: '今日Token', value: m.llm_tokens_used_today || 0 },
+            ].map(s => `
+              <div class="card text-center">
+                <div class="text-3xl font-bold" style="color:var(--primary)">${s.value}</div>
+                <div class="text-xs mt-2" style="color:var(--muted-foreground)">${s.label}</div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      } catch (err) {
+        content.innerHTML = `<p class="text-sm" style="color:var(--destructive)">加载失败: ${err instanceof Error ? err.message : 'Unknown'}</p>`;
+      }
     }
   }
 }
@@ -910,16 +1188,65 @@ function renderAdmin(): void {
 export function initApp(): void {
   loadSavedUser();
 
-  router
-    .addRoute('/login', renderLogin)
-    .addRoute('/register', renderLogin)
-    .addRoute('/dashboard', () => { if (!currentUser) { router.navigate('/login'); return; } renderDashboard(); })
-    .addRoute('/collect', () => { if (!currentUser) { router.navigate('/login'); return; } renderCollect(); })
-    .addRoute('/articles', () => { if (!currentUser) { router.navigate('/login'); return; } renderArticles(); })
-    .addRoute('/upload', () => { if (!currentUser) { router.navigate('/login'); return; } renderUpload(); })
-    .addRoute('/rewrite', () => { if (!currentUser) { router.navigate('/login'); return; } renderRewrite(); })
-    .addRoute('/admin', () => { if (!currentUser) { router.navigate('/login'); return; } renderAdmin(); })
-    .addRoute('/', () => { router.navigate(currentUser ? '/dashboard' : '/login'); });
+  router.addRoute('/login', renderLogin);
+  router.addRoute('/', () => {
+    if (!currentUser || !getAuthToken()) {
+      router.navigate('/login');
+    } else {
+      router.navigate('/dashboard');
+    }
+  });
+  router.addRoute('/dashboard', () => {
+    if (!currentUser || !getAuthToken()) { router.navigate('/login'); return; }
+    renderDashboard();
+  });
+  router.addRoute('/collect', () => {
+    if (!currentUser || !getAuthToken()) { router.navigate('/login'); return; }
+    renderCollect();
+  });
+  router.addRoute('/articles', () => {
+    if (!currentUser || !getAuthToken()) { router.navigate('/login'); return; }
+    renderArticles();
+  });
+  router.addRoute('/upload', () => {
+    if (!currentUser || !getAuthToken()) { router.navigate('/login'); return; }
+    renderUpload();
+  });
+  router.addRoute('/rewrite', () => {
+    if (!currentUser || !getAuthToken()) { router.navigate('/login'); return; }
+    renderRewrite();
+  });
+  router.addRoute('/settings', () => {
+    if (!currentUser || !getAuthToken()) { router.navigate('/login'); return; }
+    renderSettings();
+  });
+  router.addRoute('/admin', () => {
+    if (!currentUser || !getAuthToken()) { router.navigate('/login'); return; }
+    renderAdmin();
+  });
+  // Analysis detail route
+  router.addRoute('/analysis/:id', (params?: Record<string, string>) => {
+    if (!currentUser || !getAuthToken()) { router.navigate('/login'); return; }
+    renderAnalysisDetail(params?.id || '');
+  });
+
+  // Handle dynamic routes
+  const origResolve = router.resolve.bind(router);
+  router.resolve = function() {
+    const path = window.location.hash.slice(1) || '/';
+    // Check for /analysis/:id pattern
+    const analysisMatch = path.match(/^\/analysis\/(.+)$/);
+    if (analysisMatch) {
+      renderAnalysisDetail(analysisMatch[1]);
+      return;
+    }
+    origResolve();
+  };
 
   router.start();
+
+  // If not logged in, go to login
+  if (!currentUser || !getAuthToken()) {
+    router.navigate('/login');
+  }
 }
